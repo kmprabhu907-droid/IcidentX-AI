@@ -1,0 +1,24 @@
+"""
+INCIDENTX AI - API v1 Master Router
+"""
+
+from fastapi import APIRouter
+from backend.app.api.v1.incidents import router as incidents_router
+from backend.app.api.v1.services import router as services_router
+from backend.app.api.v1.investigation import router as investigation_router
+from backend.app.api.v1.audit import router as audit_router
+from backend.app.api.v1.health import router as health_router
+from backend.app.api.v1.observability import router as observability_router
+from backend.app.api.v1.telemetry import router as telemetry_router
+from backend.app.api.v1.simulation import router as simulation_router
+
+api_v1_router = APIRouter()
+
+api_v1_router.include_router(health_router)
+api_v1_router.include_router(incidents_router)
+api_v1_router.include_router(services_router)
+api_v1_router.include_router(investigation_router)
+api_v1_router.include_router(audit_router)
+api_v1_router.include_router(observability_router)
+api_v1_router.include_router(telemetry_router)
+api_v1_router.include_router(simulation_router)
