@@ -1,0 +1,16 @@
+# Bandit configuration for IncidentX AI
+# Excludes test suites and focuses on high/medium confidence security flaws
+exclude_dirs:
+  - tests
+  - .venv
+  - frontend
+  - node_modules
+  - backups
+
+skips:
+  - B101  # Use of assert detected (assert is standard in test harnesses)
+
+assert_used:
+  skips:
+    - "*_test.py"
+    - "test_*.py"
