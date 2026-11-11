@@ -1,0 +1,180 @@
+# ==============================================================================
+# IncidentX AI — Production Docker Compose Configuration
+# Enterprise Grade Topology with Tiered Network Isolation & Resource Limits
+# ==============================================================================
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # Data Tier: PostgreSQL 16 (Relational & Analytical Store)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: incidentx-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-incidentx_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password must be set in production}
+      POSTGRES_DB: ${POSTGRES_DB:-incidentx_prod}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - postgres_prod_backups:/backups
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4096M
+        reservations:
+          cpus: "0.5"
+          memory: 1024M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-incidentx_admin} -d ${POSTGRES_DB:-incidentx_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - incidentx_data
+
+  # ----------------------------------------------------------------------------
+  # Cache Tier: Redis 7 (Distributed Cache & Event Bus)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: incidentx-redis-prod
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-incidentx_redis_secure_pass}"]
+    volumes:
+      - redis_prod_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-incidentx_redis_secure_pass}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - incidentx_internal
+
+  # ----------------------------------------------------------------------------
+  # Application Tier: FastAPI Backend API Server
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.backend
+    container_name: incidentx-backend-prod
+    restart: always
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-incidentx_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-incidentx_prod}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-incidentx_redis_secure_pass}@redis:6379/0
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://incidentx.internal}
+      SECRET_KEY: ${SECRET_KEY:?Production SECRET_KEY must be supplied}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ENABLE_RATE_LIMITING: "true"
+      MAX_PAYLOAD_SIZE_BYTES: "2097152"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - incidentx_internal
+      - incidentx_data
+
+  # ----------------------------------------------------------------------------
+  # Presentation Tier: Next.js Frontend (Standalone)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.frontend
+    container_name: incidentx-frontend-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000/api/v1}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+    networks:
+      - incidentx_internal
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  postgres_prod_backups:
+    driver: local
+  redis_prod_data:
+    driver: local
+
+networks:
+  # Internal network connecting application services to cache
+  incidentx_internal:
+    driver: bridge
+    internal: false
+  # Isolated database tier network
+  incidentx_data:
+    driver: bridge
+    internal: true
