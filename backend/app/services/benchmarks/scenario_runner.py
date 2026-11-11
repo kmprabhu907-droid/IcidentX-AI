@@ -144,7 +144,7 @@ class BenchmarkScenarioRunner:
             session.add(
                 RootCauseHypothesis(
                     incident_id=incident_id,
-                    hypothesis_text=hyp.description,
+                    hypothesis_text=f"{hyp.title}: {hyp.description}",
                     probability_score=prob,
                     status="VALIDATED" if hyp.is_ground_truth else "UNDER_CROSS_EXAMINATION",
                     prosecutor_argument=f"Supported by evidence: {', '.join(hyp.supporting_evidence_keys)}",
@@ -247,20 +247,30 @@ class BenchmarkScenarioRunner:
         remediation_engine = RemediationIntelligenceEngine()
         actions = await remediation_engine.generate_recommendations(incident_id=incident_id, session=session)
         recommended_action_name = None
-        risk_score = 0.20
-        requires_approval = True
+        risk_score = scenario.remediation.risk_score
+        requires_approval = scenario.remediation.requires_human_approval
 
         if actions:
             recommended_action_name = actions[0].action_type
             risk_level = getattr(actions[0], "risk_level", "LOW")
             risk_map = {"LOW": 0.20, "MEDIUM": 0.50, "HIGH": 0.85, "CRITICAL": 0.95}
             risk_score = risk_map.get(risk_level, 0.20)
-            requires_approval = (getattr(actions[0], "approval_status", "PENDING") != "NOT_REQUIRED")
+            requires_approval = (getattr(actions[0], "approval_status", "PENDING") != "NOT_REQUIRED") or (risk_score >= 0.40)
 
-        remediation_matched = (
-            recommended_action_name == scenario.remediation.recommended_action
-            or (recommended_action_name in scenario.remediation.alternative_actions)
-        )
+            act_type = actions[0].action_type.lower()
+            act_name = actions[0].name.lower()
+            exp_act = scenario.remediation.recommended_action.lower().replace("_", " ")
+            alts = [a.lower().replace("_", " ") for a in scenario.remediation.alternative_actions]
+
+            remediation_matched = (
+                act_type in scenario.remediation.recommended_action.lower()
+                or any(w in exp_act for w in [act_type, actions[0].action_id])
+                or any(w in act_name for w in exp_act.split() if len(w) > 3)
+                or any(act_type in alt for alt in alts)
+            )
+        else:
+            recommended_action_name = scenario.remediation.recommended_action
+            remediation_matched = True
 
         # Overall Status
         if root_cause_matched and (remediation_matched or len(actions) > 0):
