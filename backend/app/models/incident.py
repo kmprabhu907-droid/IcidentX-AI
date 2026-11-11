@@ -39,6 +39,12 @@ class Incident(Base, UUIDMixin, TimestampMixin):
     )
     impact_scope: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     mttr_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        default="default-org",
+        index=True
+    )
 
     # Relationships
     evidence_items: Mapped[List["Evidence"]] = relationship(

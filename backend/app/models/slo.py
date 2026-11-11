@@ -22,6 +22,9 @@ class SLODefinition(Base, UUIDMixin, TimestampMixin):
     )
     service_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, default="default-org", index=True
+    )
     slo_type: Mapped[str] = mapped_column(String(50), nullable=False)  # availability, latency, error_rate
     target_percentage: Mapped[float] = mapped_column(Float, nullable=False, default=99.9)
     window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)

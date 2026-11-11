@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database schema synchronized successfully.")
 
+    # Run Phase 6 multi-tenancy schema migration
+    from backend.app.core.migration_phase6 import run_phase6_migration
+    await run_phase6_migration()
+
     # Start autonomous observability & detection engine
     from backend.app.services.observability.engine import observability_engine
     await observability_engine.start()

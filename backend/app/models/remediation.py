@@ -17,6 +17,9 @@ class RemediationAction(Base, UUIDMixin, TimestampMixin):
     incident_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, default="default-org", index=True
+    )
     hypothesis_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("root_cause_hypotheses.id", ondelete="SET NULL"), nullable=True, index=True
     )

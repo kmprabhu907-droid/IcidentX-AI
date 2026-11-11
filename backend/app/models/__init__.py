@@ -14,6 +14,12 @@ from backend.app.models.audit import AuditLog
 from backend.app.models.slo import SLODefinition, SLOMeasurement
 from backend.app.models.reliability import AnomalyRecord, RegressionRecord, PredictiveWarning
 from backend.app.models.user import User, RefreshToken, UserRole
+from backend.app.models.organization import (
+    Organization,
+    OrganizationMembership,
+    OrganizationTier,
+    MemberRole,
+)
 
 __all__ = [
     "Base",
@@ -38,4 +44,8 @@ __all__ = [
     "User",
     "RefreshToken",
     "UserRole",
+    "Organization",
+    "OrganizationMembership",
+    "OrganizationTier",
+    "MemberRole",
 ]

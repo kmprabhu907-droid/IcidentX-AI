@@ -44,12 +44,14 @@ class ApiError extends Error {
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = typeof window !== "undefined" ? localStorage.getItem("incidentx_access_token") : null;
+  const orgId = typeof window !== "undefined" ? localStorage.getItem("incidentx_org_id") : null;
   try {
     const res = await fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(orgId ? { "X-Organization-ID": orgId } : {}),
         ...options?.headers,
       },
     });
@@ -410,6 +412,32 @@ export const api = {
 
   getMe: () => request<any>("/auth/me"),
   getRoles: () => request<any>("/auth/roles"),
+
+  // Multi-Tenant Organizations (Stage 6.3)
+  listOrganizations: () => request<any[]>("/organizations"),
+  getOrganization: (orgId: string) => request<any>(`/organizations/${orgId}`),
+  createOrganization: (payload: { name: string; slug: string; tier?: string; settings_json?: string }) =>
+    request<any>("/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  addOrganizationMember: (orgId: string, payload: { email: string; role: string }) =>
+    request<any>(`/organizations/${orgId}/members`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  listOrganizationMembers: (orgId: string) =>
+    request<any[]>(`/organizations/${orgId}/members`),
+  switchOrganization: async (orgId: string) => {
+    const res = await request<any>("/organizations/switch", {
+      method: "POST",
+      body: JSON.stringify({ organization_id: orgId }),
+    });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("incidentx_org_id", orgId);
+    }
+    return res;
+  },
 };
 
 export const reliabilityApi = {
