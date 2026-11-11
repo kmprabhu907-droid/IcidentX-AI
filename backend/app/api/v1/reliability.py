@@ -25,6 +25,7 @@ from backend.app.services.reliability_memory.remediation_learner import (
     SIDE_EFFECT_REGISTRY,
 )
 from backend.app.services.predictive import PredictiveReliabilityEngine
+from backend.app.services.slo import SLOIntelligenceEngine
 
 router = APIRouter(prefix="/reliability", tags=["Reliability Intelligence"])
 
@@ -283,4 +284,69 @@ async def get_capacity_risks(
         "count": len(risks),
         "risks": risks,
     }
+
+
+# ============================================================================
+# STAGE 5.6: SLO & ERROR BUDGET ENDPOINTS
+# ============================================================================
+
+@router.get("/slo")
+async def list_slos(
+    service_name: Optional[str] = Query(None, description="Optional service name filter"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    List all active Service Level Objectives (SLOs) with current real-time SLI measurements
+    and remaining error budget percentages.
+    """
+    slos = await SLOIntelligenceEngine.get_all_slos_status(
+        service_name=service_name,
+        db=db,
+    )
+    return {
+        "service_name": service_name or "all",
+        "count": len(slos),
+        "slos": slos,
+    }
+
+
+@router.get("/error-budget")
+async def get_error_budgets(
+    service_name: Optional[str] = Query(None, description="Optional service name filter"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Retrieve comprehensive error budget status, total allowed budget, consumption rate,
+    and operational exhaustion health tiers.
+    """
+    budgets = await SLOIntelligenceEngine.get_error_budgets(
+        service_name=service_name,
+        db=db,
+    )
+    return {
+        "service_name": service_name or "all",
+        "count": len(budgets),
+        "error_budgets": budgets,
+    }
+
+
+@router.get("/burn-rate")
+async def get_burn_rates(
+    service_name: Optional[str] = Query(None, description="Optional service name filter"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Evaluate multi-window burn rate intelligence (1h, 6h, 24h, 3d, 14d, 30d) and trigger
+    Google SRE fast-burn (>14.4x) and slow-burn (>1.0x) alerts.
+    """
+    burn_rates = await SLOIntelligenceEngine.get_burn_rates(
+        service_name=service_name,
+        db=db,
+    )
+    return {
+        "service_name": service_name or "all",
+        "count": len(burn_rates),
+        "burn_rates": burn_rates,
+    }
+
 
