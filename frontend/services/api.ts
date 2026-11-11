@@ -368,3 +368,85 @@ export const api = {
       { method: "POST" }
     ),
 };
+
+export const reliabilityApi = {
+  getOverview: () => request<any>("/observability/overview"),
+
+  getAnomalies: (params?: { page_size?: number; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page_size) q.set("page_size", params.page_size.toString());
+    if (params?.status) q.set("status", params.status);
+    return request<any>(`/observability/anomalies?${q.toString()}`);
+  },
+
+  getActiveRegressions: () =>
+    request<any[]>("/observability/regressions/active"),
+
+  getIncidentMemories: (params?: { service_name?: string; severity?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.service_name) q.set("service_name", params.service_name);
+    if (params?.severity) q.set("severity", params.severity);
+    if (params?.limit) q.set("limit", params.limit.toString());
+    return request<any>(`/reliability/memory/incidents?${q.toString()}`);
+  },
+
+  getIncidentMemoryDetails: (incidentId: string) =>
+    request<any>(`/reliability/memory/incidents/${incidentId}`),
+
+  searchMemory: (body: any) =>
+    request<any>("/reliability/memory/search", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getRemediationHistory: (actionId?: string) => {
+    const q = actionId ? `?action_id=${actionId}` : "";
+    return request<any>(`/reliability/memory/remediation-history${q}`);
+  },
+
+  getPredictions: (serviceName?: string) => {
+    const q = serviceName ? `?service_name=${serviceName}` : "";
+    return request<any>(`/reliability/predictions${q}`);
+  },
+
+  getForecast: (serviceId: string, metricName?: string) => {
+    const q = metricName ? `?metric_name=${metricName}` : "";
+    return request<any>(`/reliability/forecast/${serviceId}${q}`);
+  },
+
+  getCapacityRisks: () =>
+    request<any>("/reliability/capacity-risk"),
+
+  getSLOs: (serviceName?: string) => {
+    const q = serviceName ? `?service_name=${serviceName}` : "";
+    return request<any>(`/reliability/slo${q}`);
+  },
+
+  getErrorBudgets: (serviceName?: string) => {
+    const q = serviceName ? `?service_name=${serviceName}` : "";
+    return request<any>(`/reliability/error-budget${q}`);
+  },
+
+  getBurnRates: (serviceName?: string) => {
+    const q = serviceName ? `?service_name=${serviceName}` : "";
+    return request<any>(`/reliability/burn-rate${q}`);
+  },
+
+  getTimeMachine: (incidentId: string) =>
+    request<any>(`/reliability/time-machine/${incidentId}`),
+
+  getTimeMachineState: (incidentId: string, timestamp: string) =>
+    request<any>(`/reliability/time-machine/${incidentId}/state-at/${encodeURIComponent(timestamp)}`),
+
+  getCausalGraph: (incidentId: string) =>
+    request<any>(`/reliability/time-machine/${incidentId}/causal-graph`),
+
+  runAgentAssessment: (body?: { service_name?: string; incident_id?: string }) =>
+    request<any>("/reliability/agent/assess", {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
+
+  getAgentLastRun: () =>
+    request<any>("/reliability/agent/last-run"),
+};
