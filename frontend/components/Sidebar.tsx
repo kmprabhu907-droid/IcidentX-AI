@@ -14,7 +14,8 @@ import {
   Clock,
   Scale,
   BrainCircuit,
-  TestTube
+  TestTube,
+  RotateCcw
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { label: "Incidents", href: "/incidents", icon: AlertTriangle },
   { label: "Remediation Engine", href: "/remediation", icon: BrainCircuit },
   { label: "Telemetry Explorer", href: "/telemetry", icon: Radio },
+  { label: "Regression Lab", href: "/regression", icon: RotateCcw },
   { label: "Failure Injection Lab", href: "/simulation", icon: Flame },
   { label: "Services & Topology", href: "/services", icon: Server },
   { label: "System Settings", href: "/settings", icon: Settings },

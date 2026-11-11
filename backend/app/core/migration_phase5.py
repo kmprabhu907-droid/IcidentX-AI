@@ -38,6 +38,30 @@ async def run_phase5_migration():
                 # Column already exists
                 pass
 
+        # Add any newly introduced columns to regression_records
+        regression_cols_to_add = [
+            ("current_incident_id", "VARCHAR(36)"),
+            ("affected_services", "TEXT DEFAULT '[]'"),
+            ("matching_incident_ids", "TEXT DEFAULT '[]'"),
+            ("pre_incident_value", "FLOAT"),
+            ("similarity_score", "FLOAT DEFAULT 0.0"),
+            ("classification", "VARCHAR(30) DEFAULT 'POSSIBLE_REGRESSION'"),
+            ("evidence", "TEXT"),
+            ("comparison_windows", "TEXT"),
+            ("previous_remediation_ids", "TEXT DEFAULT '[]'"),
+            ("explanation", "TEXT"),
+            ("data_source", "VARCHAR(20) DEFAULT 'SIMULATED'"),
+            ("first_observed_at", "TIMESTAMP"),
+            ("last_observed_at", "TIMESTAMP"),
+        ]
+        for col_name, col_def in regression_cols_to_add:
+            try:
+                await conn.execute(text(f"ALTER TABLE regression_records ADD COLUMN {col_name} {col_def}"))
+                logger.info(f"Added column {col_name} to regression_records")
+            except Exception:
+                # Column already exists
+                pass
+
         # Verify tables exist
         tables_to_check = [
             "metric_rollups",

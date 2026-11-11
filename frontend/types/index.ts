@@ -482,3 +482,124 @@ export interface DetectionStatus {
   monitored_services: number;
   last_error?: string | null;
 }
+
+// Stage 5.3 Regression Detection & Historical Failure Intelligence Types
+export interface MetricStateValueItem {
+  metric_name: string;
+  unit: string;
+  healthy_baseline: number;
+  pre_incident: number;
+  post_remediation: number;
+  current_state: number;
+  delta_failure: number;
+  delta_recovery: number;
+  delta_degradation: number;
+  delta_total_departure: number;
+  recovery_retained_ratio: number;
+  is_regressing: boolean;
+  status_summary: string;
+}
+
+export interface FourStateComparisonData {
+  service_name: string;
+  comparison_window_minutes: number;
+  regressing_metrics: string[];
+  recovered_metrics: string[];
+  worsening_metrics: string[];
+  overall_health_score: number;
+  summary: string;
+  metrics: Record<string, MetricStateValueItem>;
+}
+
+export interface SimilarityResultItem {
+  overall_similarity_score: number;
+  services_similarity: number;
+  metric_vector_similarity: number;
+  root_cause_similarity: number;
+  topology_path_similarity: number;
+  error_signature_similarity: number;
+  weights_used: Record<string, number>;
+  shared_services: string[];
+  shared_metrics: string[];
+  shared_root_causes: string[];
+  shared_error_signatures: string[];
+  explanation: string;
+}
+
+export interface RemediationReportItem {
+  action_id: string;
+  action_name: string;
+  target_service_name: string;
+  outcome: string;
+  stability_score: number;
+  immediate_verification_status: string;
+  time_to_degradation_seconds?: number | null;
+  re_abnormal_metrics: string[];
+  secondary_degraded_metrics: string[];
+  required_rollback: boolean;
+  observation_window_minutes: number;
+  sample_count: number;
+  explanation: string;
+}
+
+export interface RegressionRecordItem {
+  id: string;
+  service_id?: string | null;
+  service_name: string;
+  incident_id?: string | null;
+  current_incident_id?: string | null;
+  metric_name: string;
+  affected_services: string[];
+  matching_incident_ids: string[];
+  baseline_value: number;
+  pre_incident_value?: number | null;
+  post_remediation_value: number;
+  current_value: number;
+  similarity_score: number;
+  regression_score: number;
+  classification: "LOW_SIMILARITY" | "POSSIBLE_REGRESSION" | "LIKELY_REGRESSION" | "CONFIRMED_REGRESSION";
+  status: "ACTIVE" | "INVESTIGATING" | "CONFIRMED" | "RESOLVED" | "FALSE_POSITIVE";
+  evidence?: {
+    detected_pattern?: string;
+    similarity_result?: SimilarityResultItem;
+    remediation_report?: RemediationReportItem;
+    score_breakdown?: Record<string, number>;
+  } | null;
+  comparison_windows?: FourStateComparisonData | null;
+  previous_remediation_ids: string[];
+  details?: string | null;
+  explanation?: {
+    which_previous_incident?: string;
+    affected_services?: string;
+    metrics_returning_abnormal?: string;
+    original_root_cause_hypothesis?: string;
+    previous_remediation_performed?: string;
+    did_remediation_provide_sustained_improvement?: string;
+    evidence_supporting_recurrence?: string;
+    evidence_contradicting_recurrence?: string;
+    similarity_strength?: string;
+    next_investigation_step?: string;
+  } | null;
+  data_source: string;
+  first_observed_at?: string | null;
+  last_observed_at?: string | null;
+  detected_at?: string | null;
+}
+
+export interface RemediationEffectivenessOverview {
+  total_remediations_analyzed: number;
+  verified_immediately: number;
+  rolled_back_count: number;
+  execution_failed_count: number;
+  active_regressions_count: number;
+  remediation_stability_ratio: number;
+  actions: Array<{
+    id: string;
+    action_id: string;
+    name: string;
+    target_service_name: string;
+    verification_status: string;
+    rollback_status: string;
+    executed_at?: string | null;
+  }>;
+}

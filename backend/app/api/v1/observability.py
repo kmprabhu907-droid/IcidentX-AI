@@ -6,10 +6,14 @@ advanced resource-creep detections, dynamic baselines, and lifecycle status mana
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.core.database import get_db
 from backend.app.services.observability.anomaly import anomaly_service
 from backend.app.services.observability.engine import observability_engine
 from backend.app.services.observability.demo_mesh import demo_mesh
+from backend.app.services.observability.regression import RegressionLifecycleService
 
 router = APIRouter(prefix="/observability", tags=["Observability"])
 
@@ -146,4 +150,129 @@ async def get_service_metrics(
         "seconds": seconds,
         "data_source": "SIMULATED" if len(demo_mesh.active_faults) > 0 else "LIVE",
         "history": history,
+    }
+
+
+# =========================================================================
+# Stage 5.3: Regression Detection Lab & Historical Failure Intelligence
+# =========================================================================
+
+@router.get("/regressions")
+async def list_regressions(
+    service_name: Optional[str] = Query(None),
+    metric_name: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    classification: Optional[str] = Query(None),
+    start_time: Optional[datetime] = Query(None),
+    end_time: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Query regression records with filtering, classification, and pagination.
+    """
+    return await RegressionLifecycleService.list_regressions(
+        db=db,
+        service_name=service_name,
+        metric_name=metric_name,
+        status=status,
+        classification=classification,
+        start_time=start_time,
+        end_time=end_time,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/regressions/active")
+async def get_active_regressions(
+    db: AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Stage 5.3: Return currently active or investigating regressions across the cluster.
+    """
+    return await RegressionLifecycleService.get_active_regressions(db)
+
+
+@router.get("/regressions/{regression_id}")
+async def get_regression_by_id(
+    regression_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Retrieve full regression record with 10 SRE diagnostic answers.
+    """
+    record = await RegressionLifecycleService.get_regression_by_id(regression_id, db)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Regression record '{regression_id}' not found.")
+    return record
+
+
+@router.patch("/regressions/{regression_id}/status")
+async def update_regression_status(
+    regression_id: str,
+    status: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Transition regression lifecycle status (ACTIVE, INVESTIGATING, CONFIRMED, RESOLVED, FALSE_POSITIVE).
+    """
+    try:
+        updated = await RegressionLifecycleService.update_status(regression_id, status, db)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Regression record '{regression_id}' not found.")
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/regressions/{regression_id}/comparison")
+async def get_regression_comparison(
+    regression_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Four-state comparison matrix (Healthy Baseline, Pre-Incident, Post-Remediation, Current State).
+    """
+    comp = await RegressionLifecycleService.get_comparison(regression_id, db)
+    if not comp:
+        raise HTTPException(status_code=404, detail=f"Four-state comparison for '{regression_id}' not found.")
+    return comp
+
+
+@router.get("/regressions/{regression_id}/history")
+async def get_regression_history(
+    regression_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Historical incident provenance, past remediation actions, and recurrence timeline.
+    """
+    return await RegressionLifecycleService.get_history(regression_id, db)
+
+
+@router.get("/remediation-effectiveness")
+async def get_remediation_effectiveness(
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Cluster-wide overview of Phase 4 remediation stability and long-term outcomes.
+    """
+    return await RegressionLifecycleService.get_remediation_effectiveness_overview(db)
+
+
+@router.post("/regressions/trigger")
+async def trigger_regression_detection(
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Stage 5.3: Trigger manual cluster regression evaluation.
+    """
+    evaluated = await RegressionLifecycleService.evaluate_and_record_regressions(db)
+    return {
+        "status": "COMPLETED",
+        "timestamp": datetime.now().isoformat(),
+        "evaluated_records_count": len(evaluated),
+        "records": [RegressionLifecycleService._format_record(r) for r in evaluated],
     }

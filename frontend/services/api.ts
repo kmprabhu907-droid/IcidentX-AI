@@ -27,6 +27,9 @@ import {
   AnomalyRecordItem,
   MetricBaselineItem,
   DetectionStatus,
+  RegressionRecordItem,
+  FourStateComparisonData,
+  RemediationEffectivenessOverview,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -300,5 +303,68 @@ export const api = {
   getServiceBaselines: (serviceIdentifier: string) =>
     request<{ service_name: string; service_id: string; baselines: Record<string, MetricBaselineItem> }>(
       `/observability/baselines/${serviceIdentifier}`
+    ),
+
+  // Stage 5.3 Regression Detection & Historical Failure Intelligence APIs
+  listRegressions: (params?: {
+    service_name?: string;
+    metric_name?: string;
+    severity?: string;
+    status?: string;
+    classification?: string;
+    start_time?: string;
+    end_time?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.service_name) query.set("service_name", params.service_name);
+    if (params?.metric_name) query.set("metric_name", params.metric_name);
+    if (params?.severity) query.set("severity", params.severity);
+    if (params?.status) query.set("status", params.status);
+    if (params?.classification) query.set("classification", params.classification);
+    if (params?.start_time) query.set("start_time", params.start_time);
+    if (params?.end_time) query.set("end_time", params.end_time);
+    if (params?.page) query.set("page", params.page.toString());
+    if (params?.page_size) query.set("page_size", params.page_size.toString());
+    return request<{ total: number; page: number; page_size: number; total_pages: number; items: RegressionRecordItem[] }>(
+      `/observability/regressions?${query.toString()}`
+    );
+  },
+
+  getActiveRegressions: () =>
+    request<RegressionRecordItem[]>("/observability/regressions/active"),
+
+  getRegressionDetails: (regressionId: string) =>
+    request<RegressionRecordItem>(`/observability/regressions/${regressionId}`),
+
+  updateRegressionStatus: (regressionId: string, status: string) =>
+    request<RegressionRecordItem>(`/observability/regressions/${regressionId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  getRegressionComparison: (regressionId: string) =>
+    request<FourStateComparisonData>(`/observability/regressions/${regressionId}/comparison`),
+
+  getRegressionHistory: (regressionId: string) =>
+    request<{
+      regression_id: string;
+      service_name: string;
+      metric_name: string;
+      original_incident?: any;
+      previous_remediations: any[];
+      first_observed_at?: string;
+      last_observed_at?: string;
+      lifecycle_status: string;
+    }>(`/observability/regressions/${regressionId}/history`),
+
+  getRemediationEffectiveness: () =>
+    request<RemediationEffectivenessOverview>("/observability/remediation-effectiveness"),
+
+  triggerRegressionDetection: () =>
+    request<{ status: string; evaluated_records_count: number; records: RegressionRecordItem[] }>(
+      "/observability/regressions/trigger",
+      { method: "POST" }
     ),
 };

@@ -64,6 +64,8 @@ class AnomalyRecord(Base, UUIDMixin, TimestampMixin):
 class RegressionRecord(Base, UUIDMixin, TimestampMixin):
     """
     Captures post-remediation regression events and recurring incident patterns.
+    Extended in Stage 5.3 to track four-state comparisons, multi-feature fingerprints,
+    similarity scores, classification, remediation histories, and the 10 SRE diagnostic answers.
     """
     __tablename__ = "regression_records"
 
@@ -74,13 +76,39 @@ class RegressionRecord(Base, UUIDMixin, TimestampMixin):
     incident_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    current_incident_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     metric_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    affected_services: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list of service names
+    matching_incident_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list of historical incident IDs
     baseline_value: Mapped[float] = mapped_column(Float, nullable=False)
+    pre_incident_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     post_remediation_value: Mapped[float] = mapped_column(Float, nullable=False)
     current_value: Mapped[float] = mapped_column(Float, nullable=False)
+    similarity_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     regression_score: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="DETECTED")  # DETECTED, INVESTIGATING, CONFIRMED, RESOLVED
+    classification: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="POSSIBLE_REGRESSION"
+    )  # LOW_SIMILARITY, POSSIBLE_REGRESSION, LIKELY_REGRESSION, CONFIRMED_REGRESSION
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="ACTIVE"
+    )  # ACTIVE, INVESTIGATING, CONFIRMED, RESOLVED, FALSE_POSITIVE
+    evidence: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON supporting & contradicting evidence
+    comparison_windows: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON four-state comparative metrics
+    previous_remediation_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON 10 SRE diagnostic answers
+    data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="SIMULATED")
+    first_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    last_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -93,6 +121,7 @@ class RegressionRecord(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         Index("idx_regression_service_time", "service_name", "detected_at"),
+        Index("idx_regression_status", "status"),
     )
 
 
