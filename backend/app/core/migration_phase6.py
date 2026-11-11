@@ -27,6 +27,9 @@ async def run_phase6_migration():
             ("remediation_actions", "organization_id", "VARCHAR(36) DEFAULT 'default-org'"),
             ("slo_definitions", "organization_id", "VARCHAR(36) DEFAULT 'default-org'"),
             ("users", "organization_id", "VARCHAR(36)"),
+            ("audit_logs", "organization_id", "VARCHAR(36) DEFAULT 'default-org'"),
+            ("audit_logs", "prev_hash", "VARCHAR(64)"),
+            ("audit_logs", "checksum", "VARCHAR(64)"),
         ]
 
         for table, col, col_def in tenant_cols:

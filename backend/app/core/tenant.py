@@ -99,3 +99,10 @@ async def get_current_tenant(
             )
 
     return org
+
+
+async def resolve_tenant(
+    tenant: Organization = Depends(get_current_tenant)
+) -> str:
+    """Convenience dependency that returns the resolved organization UUID string."""
+    return tenant.id

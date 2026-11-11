@@ -22,6 +22,7 @@ from backend.app.models.organization import (
 )
 from backend.app.models.integration import IntegrationConfig, IntegrationProvider
 from backend.app.models.workflow import WorkflowExecution, WorkflowStatus
+from backend.app.models.governance import GovernancePolicy
 
 __all__ = [
     "Base",
@@ -54,4 +55,5 @@ __all__ = [
     "IntegrationProvider",
     "WorkflowExecution",
     "WorkflowStatus",
+    "GovernancePolicy",
 ]

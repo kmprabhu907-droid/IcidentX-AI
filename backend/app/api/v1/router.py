@@ -17,11 +17,13 @@ from backend.app.api.v1.auth import router as auth_router
 from backend.app.api.v1.organizations import router as organizations_router
 from backend.app.api.v1.integrations import router as integrations_router
 from backend.app.api.v1.workflows import router as workflows_router
+from backend.app.api.v1.governance import router as governance_router
 
 api_v1_router = APIRouter()
 
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(organizations_router)
+api_v1_router.include_router(governance_router)
 api_v1_router.include_router(integrations_router)
 api_v1_router.include_router(workflows_router)
 api_v1_router.include_router(health_router)

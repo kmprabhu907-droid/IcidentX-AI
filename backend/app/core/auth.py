@@ -96,12 +96,18 @@ async def get_optional_current_user(
         return None
 
 
-def require_roles(*allowed_roles: UserRole):
+def require_roles(*allowed_roles: Any):
     """
     FastAPI dependency factory enforcing that the authenticated user possesses
-    one of the specified roles (or is a superuser).
+    one of the specified roles (or is a superuser). Accepts varargs or list/tuple of UserRole.
     """
-    role_strings = {r.value for r in allowed_roles}
+    roles = []
+    for r in allowed_roles:
+        if isinstance(r, (list, tuple, set)):
+            roles.extend(r)
+        else:
+            roles.append(r)
+    role_strings = {r.value if hasattr(r, "value") else str(r) for r in roles}
 
     def role_dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.is_superuser:
