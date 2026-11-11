@@ -24,6 +24,9 @@ import {
   ActionRegistryItem,
   VerificationReport,
   RemediationRecommendationsResponse,
+  AnomalyRecordItem,
+  MetricBaselineItem,
+  DetectionStatus,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -247,4 +250,55 @@ export const api = {
   // Audit Logs
   listAuditLogs: (page = 1, pageSize = 50) =>
     request<PaginatedResponse<AuditLog>>(`/audit-logs?page=${page}&page_size=${pageSize}`),
+
+  // Stage 5.2 Anomaly & Resource-Creep Detection APIs
+  listAnomalies: (params?: {
+    service_name?: string;
+    metric_name?: string;
+    severity?: string;
+    status?: string;
+    start_time?: string;
+    end_time?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.service_name) query.set("service_name", params.service_name);
+    if (params?.metric_name) query.set("metric_name", params.metric_name);
+    if (params?.severity) query.set("severity", params.severity);
+    if (params?.status) query.set("status", params.status);
+    if (params?.start_time) query.set("start_time", params.start_time);
+    if (params?.end_time) query.set("end_time", params.end_time);
+    if (params?.page) query.set("page", params.page.toString());
+    if (params?.page_size) query.set("page_size", params.page_size.toString());
+    return request<{ total: number; page: number; page_size: number; total_pages: number; items: AnomalyRecordItem[] }>(
+      `/observability/anomalies?${query.toString()}`
+    );
+  },
+
+  getActiveAnomalies: () =>
+    request<AnomalyRecordItem[]>("/observability/anomalies/active"),
+
+  getAnomalyDetails: (anomalyId: string) =>
+    request<AnomalyRecordItem>(`/observability/anomalies/${anomalyId}`),
+
+  updateAnomalyStatus: (anomalyId: string, status: string) =>
+    request<AnomalyRecordItem>(`/observability/anomalies/${anomalyId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  getDetectionStatus: () =>
+    request<DetectionStatus>("/observability/detection/status"),
+
+  triggerDetectionCycle: () =>
+    request<{ status: string; candidates_detected_count: number; candidates: any[] }>(
+      "/observability/detection/trigger",
+      { method: "POST" }
+    ),
+
+  getServiceBaselines: (serviceIdentifier: string) =>
+    request<{ service_name: string; service_id: string; baselines: Record<string, MetricBaselineItem> }>(
+      `/observability/baselines/${serviceIdentifier}`
+    ),
 };

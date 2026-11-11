@@ -166,6 +166,7 @@ export interface Span {
   trace_id: string;
   service_name: string;
   name: string;
+  operation_name?: string;
   parent_span_id?: string | null;
   start_offset_ms: number;
   duration_ms: number;
@@ -425,4 +426,59 @@ export interface RemediationRecommendationsResponse {
   total_recommendations: number;
   actions: RemediationAction[];
   disclaimer: string;
+}
+
+// Stage 5.2 Anomaly & Resource Creep Types
+export interface AnomalyRecordItem {
+  id: string;
+  service_id?: string | null;
+  service_name: string;
+  metric_name: string;
+  observed_value: number;
+  expected_baseline: number;
+  deviation: number;
+  ewma_value?: number | null;
+  trend_slope?: number | null;
+  severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  confidence: number;
+  detector_type: string;
+  status: "ACTIVE" | "ACKNOWLEDGED" | "RESOLVED" | "FALSE_POSITIVE";
+  observation_count: number;
+  first_observed_at?: string | null;
+  last_observed_at?: string | null;
+  detected_at?: string | null;
+  data_source: string;
+  supporting_evidence?: Record<string, any>;
+  explanation?: {
+    what_happened?: string;
+    affected_service?: string;
+    metric_changed?: string;
+    normal_baseline?: string;
+    deviation_magnitude?: string;
+    duration_abnormal?: string;
+    corroborating_signals?: string;
+    confidence_assessment?: string;
+    projected_impact?: string;
+    next_investigation_step?: string;
+  };
+}
+
+export interface MetricBaselineItem {
+  service_name: string;
+  metric_name: string;
+  mean: number;
+  std_dev: number;
+  min_normal: number;
+  max_normal: number;
+  sample_count: number;
+  has_sufficient_history: boolean;
+}
+
+export interface DetectionStatus {
+  status: string;
+  last_detection_cycle?: string | null;
+  total_anomalies_detected: number;
+  active_anomalies_count: number;
+  monitored_services: number;
+  last_error?: string | null;
 }

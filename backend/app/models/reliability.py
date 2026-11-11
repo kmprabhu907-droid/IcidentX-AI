@@ -5,7 +5,7 @@ Provides persistent entities for Anomaly Records, Regression Records, and Predic
 
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.core.database import Base, TimestampMixin, UUIDMixin
 
@@ -13,6 +13,8 @@ from backend.app.core.database import Base, TimestampMixin, UUIDMixin
 class AnomalyRecord(Base, UUIDMixin, TimestampMixin):
     """
     Persisted record of an anomaly detected by statistical, EWMA, or threshold engines.
+    Extended in Stage 5.2 to track EWMA values, trend slopes, observation counts,
+    and full lifecycle statuses (ACTIVE, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE).
     """
     __tablename__ = "anomaly_records"
 
@@ -24,10 +26,25 @@ class AnomalyRecord(Base, UUIDMixin, TimestampMixin):
     observed_value: Mapped[float] = mapped_column(Float, nullable=False)
     expected_baseline: Mapped[float] = mapped_column(Float, nullable=False)
     deviation: Mapped[float] = mapped_column(Float, nullable=False)
-    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="WARN")  # INFO, WARN, CRITICAL
+    ewma_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    trend_slope: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="WARN")  # INFO, LOW, MEDIUM, HIGH, CRITICAL
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.85)
     detector_type: Mapped[str] = mapped_column(String(50), nullable=False)
     supporting_evidence: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON or structured summary
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="ACTIVE")  # ACTIVE, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE
+    observation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    last_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -40,6 +57,7 @@ class AnomalyRecord(Base, UUIDMixin, TimestampMixin):
 
     __table_args__ = (
         Index("idx_anomaly_service_time", "service_name", "detected_at"),
+        Index("idx_anomaly_status", "status"),
     )
 
 

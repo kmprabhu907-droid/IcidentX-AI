@@ -248,15 +248,53 @@ def run_checks():
         assert len(history_data["rollups"]) >= 1
         print(f"  ✅ Historical Rollups OK: Total stored rollups={history_data['total']}, Page 1 count={len(history_data['rollups'])}")
 
-        # 25. Check Frontend Pages
-        print("\n[25/25] Testing Next.js Frontend Server Pages...")
+        # 25. Phase 5 Stage 5.2: Anomaly Detection Status & Active Anomalies
+        print("\n[25/28] Testing Anomaly Detection Engine Status (/observability/detection/status)...")
+        det_status_r = client.get(f"{BACKEND_URL}/api/v1/observability/detection/status")
+        assert det_status_r.status_code == 200
+        det_status = det_status_r.json()
+        assert det_status["status"] == "HEALTHY"
+        assert det_status["monitored_services"] == 7
+        print(f"  ✅ Anomaly Detection Engine OK: Status={det_status['status']}, Monitored Services={det_status['monitored_services']}")
+
+        # 26. Phase 5 Stage 5.2: Dynamic Baselines
+        print("\n[26/28] Testing Dynamic Adaptive Baselines (/observability/baselines/order-service)...")
+        base_r = client.get(f"{BACKEND_URL}/api/v1/observability/baselines/order-service")
+        assert base_r.status_code == 200
+        base_data = base_r.json()
+        assert base_data["service_name"] == "order-service"
+        assert "cpu_utilization" in base_data["baselines"]
+        cpu_base = base_data["baselines"]["cpu_utilization"]
+        assert cpu_base["mean"] > 0
+        assert cpu_base["has_sufficient_history"] is True
+        print(f"  ✅ Dynamic Baselines OK: order-service cpu_utilization mean={cpu_base['mean']}, 3σ range=[{cpu_base['min_normal']}, {cpu_base['max_normal']}]")
+
+        # 27. Phase 5 Stage 5.2: Anomaly Query & Lifecycle Status Patch
+        print("\n[27/28] Testing Anomaly Records & Lifecycle Transition...")
+        anom_list_r = client.get(f"{BACKEND_URL}/api/v1/observability/anomalies?page_size=1")
+        assert anom_list_r.status_code == 200
+        anom_data = anom_list_r.json()
+        if anom_data["total"] > 0:
+            target_anom = anom_data["items"][0]
+            patch_r = client.patch(
+                f"{BACKEND_URL}/api/v1/observability/anomalies/{target_anom['id']}/status",
+                json={"status": "ACKNOWLEDGED"}
+            )
+            assert patch_r.status_code == 200
+            assert patch_r.json()["status"] == "ACKNOWLEDGED"
+            print(f"  ✅ Anomaly Lifecycle OK: Anomaly {target_anom['id'][:8]} transitioned to ACKNOWLEDGED")
+        else:
+            print("  ℹ️ No existing anomaly records to patch, skipping patch check")
+
+        # 28. Check Frontend Pages
+        print("\n[28/28] Testing Next.js Frontend Server Pages...")
         for path in ["/", "/remediation", "/telemetry", "/simulation", "/incidents", f"/incidents/{incident_id}", "/services"]:
             front_r = client.get(f"{FRONTEND_URL}{path}")
             assert front_r.status_code == 200
         print("  ✅ All 7 Next.js Pages Responding cleanly (HTTP 200)")
 
     print("\n" + "=" * 60)
-    print("🎉 ALL 25 INTEGRATION CHECKS PASSED PERFECTLY!")
+    print("🎉 ALL 28 INTEGRATION CHECKS PASSED PERFECTLY!")
     print("=" * 60)
 
 

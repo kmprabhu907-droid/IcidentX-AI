@@ -166,6 +166,13 @@ class ObservabilityEngine:
                 for candidate in candidates:
                     await self._persist_correlated_incident(candidate)
 
+            # Stage 5.2 Advanced Anomaly & Resource-Creep Detection Cycle
+            try:
+                from backend.app.services.observability.anomaly import anomaly_service
+                await anomaly_service.run_detection_cycle()
+            except Exception as e:
+                logger.error(f"[ObservabilityEngine] Error in anomaly_service cycle: {e}")
+
             return cycle_alerts
 
     async def _persist_correlated_incident(self, candidate):

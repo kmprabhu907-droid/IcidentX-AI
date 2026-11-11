@@ -21,6 +21,23 @@ async def run_phase5_migration():
         # Create any missing tables defined in Base.metadata
         await conn.run_sync(Base.metadata.create_all)
         
+        # Add any newly introduced columns to anomaly_records
+        cols_to_add = [
+            ("ewma_value", "FLOAT"),
+            ("trend_slope", "FLOAT"),
+            ("status", "VARCHAR(30) DEFAULT 'ACTIVE'"),
+            ("observation_count", "INTEGER DEFAULT 1"),
+            ("first_observed_at", "TIMESTAMP"),
+            ("last_observed_at", "TIMESTAMP"),
+        ]
+        for col_name, col_def in cols_to_add:
+            try:
+                await conn.execute(text(f"ALTER TABLE anomaly_records ADD COLUMN {col_name} {col_def}"))
+                logger.info(f"Added column {col_name} to anomaly_records")
+            except Exception:
+                # Column already exists
+                pass
+
         # Verify tables exist
         tables_to_check = [
             "metric_rollups",
