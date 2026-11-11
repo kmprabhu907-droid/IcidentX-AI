@@ -7,7 +7,8 @@ from backend.app.core.database import Base
 from backend.app.models.incident import Incident
 from backend.app.models.service import Service, ServiceDependency
 from backend.app.models.telemetry import TelemetryEvent
-from backend.app.models.investigation import AgentExecution, Evidence, RootCauseHypothesis
+from backend.app.models.investigation import AgentExecution, Evidence, RootCauseHypothesis, InvestigationPlan
+from backend.app.models.timeline import TimelineEvent
 from backend.app.models.remediation import RemediationAction
 from backend.app.models.audit import AuditLog
 
@@ -20,6 +21,8 @@ __all__ = [
     "AgentExecution",
     "Evidence",
     "RootCauseHypothesis",
+    "InvestigationPlan",
+    "TimelineEvent",
     "RemediationAction",
     "AuditLog",
 ]

@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     ENABLE_EXECUTION_GUARDRAILS: bool = True
     REQUIRE_HUMAN_APPROVAL_MUTATION: bool = True
 
+    # AI Provider & Investigation Intelligence (Phase 3)
+    AI_PROVIDER: str = Field(default="deterministic", description="AI Provider: deterministic, gemini, openai, anthropic")
+    AI_MODEL: str = Field(default="incidentx-deterministic-v1", description="Model identifier")
+    AI_API_KEY: str = Field(default="", description="API key for external LLM provider")
+    AI_TEMPERATURE: float = Field(default=0.1, description="Sampling temperature")
+    AI_REQUEST_TIMEOUT_SECONDS: float = Field(default=30.0, description="Per-agent invocation timeout")
+    AI_MAX_RETRIES: int = Field(default=2, description="Max retries on validation or rate limits")
+    PROMPT_VERSION: str = Field(default="v3.0.0", description="Investigation prompt version tracking")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

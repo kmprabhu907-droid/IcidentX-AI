@@ -251,6 +251,10 @@ class ObservabilityEngine:
             logger.info(
                 f"[ObservabilityEngine] Created autonomous incident '{incident.title}' (ID: {incident.id}, Severity: {candidate.severity})"
             )
+
+            # Trigger Phase 3 Autonomous Investigation Orchestrator in background
+            from backend.app.services.investigation.orchestrator import investigation_orchestrator
+            asyncio.create_task(investigation_orchestrator.run_investigation(incident.id))
         except Exception as e:
             logger.error(f"[ObservabilityEngine] Failed to persist autonomous incident: {e}", exc_info=True)
 

@@ -41,11 +41,16 @@ export interface ServiceDependency {
 export interface Evidence {
   id: string;
   incident_id: string;
+  hypothesis_id?: string | null;
   evidence_type: string;
   source_system: string;
+  affected_service_name?: string | null;
+  raw_source_ref?: string | null;
   description: string;
+  relevant_observation?: string | null;
   confidence_score: number;
   is_contradictory: boolean;
+  verification_status?: string;
   observed_at: string;
   raw_data?: string | null;
   created_at: string;
@@ -57,10 +62,14 @@ export interface RootCauseHypothesis {
   culprit_service_id?: string | null;
   hypothesis_text: string;
   probability_score: number;
-  status: "PROPOSED" | "UNDER_CROSS_EXAMINATION" | "VALIDATED" | "DISPROVEN";
+  status: "PROPOSED" | "UNDER_CROSS_EXAMINATION" | "VALIDATED" | "DISPROVEN" | "INSUFFICIENT_EVIDENCE" | string;
   prosecutor_argument?: string | null;
   defense_argument?: string | null;
   judicial_ruling?: string | null;
+  causal_chain?: string | null;
+  missing_evidence?: string | null;
+  evidence_count?: number;
+  contradiction_count?: number;
   is_confirmed_root_cause: boolean;
   created_at: string;
   updated_at: string;
@@ -71,11 +80,14 @@ export interface AgentExecution {
   incident_id: string;
   agent_role: string;
   execution_phase: string;
-  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | string;
+  model_version?: string | null;
+  prompt_version?: string | null;
   thought_process?: string | null;
   tool_name?: string | null;
   tool_arguments?: string | null;
   observation?: string | null;
+  error_message?: string | null;
   duration_ms?: number | null;
   created_at: string;
 }
@@ -231,4 +243,77 @@ export interface SimulationStatus {
   active_fault_count: number;
   data_source: "LIVE" | "SIMULATED";
   active_faults: ActiveFault[];
+}
+
+// ==========================================
+// Phase 3: Investigation, Courtroom & Timeline Types
+// ==========================================
+
+export interface TimelineEvent {
+  id: string;
+  incident_id: string;
+  timestamp: string;
+  event_type: string;
+  service_name: string;
+  title: string;
+  description: string;
+  severity: string;
+  data_source: string;
+  raw_data?: string | null;
+  created_at: string;
+}
+
+export interface CourtroomItem {
+  hypothesis: RootCauseHypothesis;
+  supporting_evidence: Evidence[];
+  contradictory_evidence: Evidence[];
+  judicial_ruling?: string | null;
+  is_insufficient_evidence: boolean;
+}
+
+export interface CourtroomView {
+  incident_id: string;
+  incident_title: string;
+  severity: string;
+  total_hypotheses: number;
+  courtroom_evaluations: CourtroomItem[];
+}
+
+export interface DiagnosticAction {
+  action_id: string;
+  name: string;
+  category?: string;
+  target_service: string;
+  safety_rating?: "SAFE" | "RESTRICTED" | "HAZARDOUS" | string;
+  operational_risk?: "LOW" | "MEDIUM" | "HIGH" | string;
+  command_type?: "READ_ONLY" | "PROBE" | "INSPECTION" | string;
+  diagnostic_value?: number;
+  value_estimate?: string;
+  estimated_cost: string;
+  risk_explanation?: string;
+  command_template?: string;
+  rationale?: string;
+  justification?: string;
+}
+
+export interface InvestigationPlanView {
+  incident_id: string;
+  plan_status: string;
+  total_actions: number;
+  recommended_actions: DiagnosticAction[];
+}
+
+export interface InvestigationStatus {
+  incident_id: string;
+  current_stage: string;
+  status: string;
+  completed_agents: string[];
+  failed_agents: string[];
+  duration_ms: number;
+}
+
+export interface TimelineView {
+  incident_id: string;
+  total_events: number;
+  events: TimelineEvent[];
 }

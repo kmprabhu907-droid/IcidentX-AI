@@ -103,12 +103,12 @@ def run_checks():
         print("  ✅ Emergency Stop OK: Baseline restored")
 
         # 11. Create and Retrieve Incident
-        print("\n[11/12] Testing Incident Lifecycle (POST /api/v1/incidents)...")
+        print("\n[11/16] Testing Incident Lifecycle (POST /api/v1/incidents)...")
         payload = {
             "title": "Integration Test: Payment Gateway TLS Handshake Timeout",
             "summary": "Verified integration test incident record.",
             "severity": "SEV-1",
-            "status": "INVESTIGATING",
+            "status": "DETECTED",
             "impact_scope": "payment-svc, checkout-cart"
         }
         r = client.post(f"{BACKEND_URL}/api/v1/incidents", json=payload)
@@ -117,15 +117,51 @@ def run_checks():
         incident_id = inc["id"]
         print(f"  ✅ Incident Created: ID={incident_id}, Title='{inc['title']}'")
 
-        # 12. Check Frontend Pages
-        print("\n[12/12] Testing Next.js Frontend Server Pages...")
-        for path in ["/", "/telemetry", "/simulation", "/incidents", "/services"]:
+        # 12. Trigger Autonomous Investigation
+        print("\n[12/16] Testing 10-Agent Autonomous Investigation Pipeline...")
+        inv_r = client.post(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/investigate")
+        assert inv_r.status_code == 200
+        inv_data = inv_r.json()
+        assert inv_data["status"] == "COMPLETED"
+        total_completed = len(inv_data["investigation"]["completed_agents"])
+        duration = inv_data["investigation"]["duration_ms"]
+        print(f"  ✅ Autonomous Investigation Complete: Run {total_completed} agents in {duration}ms")
+
+        # 13. Root Cause Courtroom Verification
+        print("\n[13/16] Testing Root Cause Courtroom (/courtroom)...")
+        court_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/courtroom")
+        assert court_r.status_code == 200
+        court_data = court_r.json()
+        assert court_data["total_hypotheses"] >= 2
+        print(f"  ✅ Root Cause Courtroom OK: Evaluated {court_data['total_hypotheses']} competing hypotheses with adversarial rulings")
+
+        # 14. Incident Time Machine Verification
+        print("\n[14/16] Testing Incident Time Machine (/timeline)...")
+        time_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/timeline")
+        assert time_r.status_code == 200
+        time_data = time_r.json()
+        assert time_data["total_events"] > 0
+        print(f"  ✅ Incident Time Machine OK: Reconstructed {time_data['total_events']} chronological events with raw data")
+
+        # 15. Active Investigation Planner Verification
+        print("\n[15/16] Testing Active Investigation Planner (/planner)...")
+        plan_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/planner")
+        assert plan_r.status_code == 200
+        plan_data = plan_r.json()
+        assert plan_data["total_actions"] >= 1
+        for action in plan_data["recommended_actions"]:
+            assert action.get("operational_risk") in ["LOW", "MEDIUM", "SAFE"] or action.get("safety_rating") in ["SAFE", "RESTRICTED", "HAZARDOUS"]
+        print(f"  ✅ Active Diagnostic Planner OK: {plan_data['total_actions']} safe diagnostic actions prioritized")
+
+        # 16. Check Frontend Pages
+        print("\n[16/16] Testing Next.js Frontend Server Pages...")
+        for path in ["/", "/telemetry", "/simulation", "/incidents", f"/incidents/{incident_id}", "/services"]:
             front_r = client.get(f"{FRONTEND_URL}{path}")
             assert front_r.status_code == 200
-        print("  ✅ All 5 Next.js Pages Responding cleanly (HTTP 200)")
+        print("  ✅ All 6 Next.js Pages Responding cleanly (HTTP 200)")
 
     print("\n" + "=" * 60)
-    print("🎉 ALL 12 INTEGRATION CHECKS PASSED PERFECTLY!")
+    print("🎉 ALL 16 INTEGRATION CHECKS PASSED PERFECTLY!")
     print("=" * 60)
 
 

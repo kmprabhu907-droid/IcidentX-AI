@@ -70,7 +70,7 @@ async def test_e2e_scenario_2_db_pool_exhaustion():
         res = await session.execute(stmt)
         incident = res.scalars().first()
         assert incident is not None
-        assert incident.status == "DETECTED"
+        assert incident.status in ["DETECTED", "INVESTIGATING"]
 
     await chaos_controller.stop_all()
 

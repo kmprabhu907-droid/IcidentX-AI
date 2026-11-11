@@ -14,6 +14,11 @@ import {
   AnomalyAlert,
   ChaosScenario,
   SimulationStatus,
+  TimelineEvent,
+  CourtroomView,
+  InvestigationPlanView,
+  InvestigationStatus,
+  TimelineView,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -144,6 +149,19 @@ export const api = {
   listDependencies: () => request<PaginatedResponse<ServiceDependency>>("/dependencies"),
 
   // Investigation & Courtroom
+  triggerInvestigation: (incidentId: string) =>
+    request<{ status: string; message: string; investigation: any }>(
+      `/incidents/${incidentId}/investigate`,
+      { method: "POST" }
+    ),
+  getInvestigationStatus: (incidentId: string) =>
+    request<InvestigationStatus>(`/incidents/${incidentId}/investigation/status`),
+  getCourtroom: (incidentId: string) =>
+    request<CourtroomView>(`/incidents/${incidentId}/courtroom`),
+  getTimeline: (incidentId: string) =>
+    request<TimelineView>(`/incidents/${incidentId}/timeline`),
+  getPlanner: (incidentId: string) =>
+    request<InvestigationPlanView>(`/incidents/${incidentId}/planner`),
   getIncidentEvidence: (incidentId: string) =>
     request<PaginatedResponse<Evidence>>(`/incidents/${incidentId}/evidence`),
   getIncidentHypotheses: (incidentId: string) =>

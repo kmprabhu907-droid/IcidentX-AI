@@ -59,6 +59,12 @@ class Incident(Base, UUIDMixin, TimestampMixin):
     telemetry_events: Mapped[List["TelemetryEvent"]] = relationship(
         "TelemetryEvent", back_populates="incident"
     )
+    timeline_events: Mapped[List["TimelineEvent"]] = relationship(
+        "TimelineEvent", back_populates="incident", cascade="all, delete-orphan"
+    )
+    investigation_plans: Mapped[List["InvestigationPlan"]] = relationship(
+        "InvestigationPlan", back_populates="incident", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_incident_status_severity", "status", "severity"),
