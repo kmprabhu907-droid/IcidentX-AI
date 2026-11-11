@@ -21,6 +21,7 @@ from backend.app.models.organization import (
     MemberRole,
 )
 from backend.app.models.integration import IntegrationConfig, IntegrationProvider
+from backend.app.models.workflow import WorkflowExecution, WorkflowStatus
 
 __all__ = [
     "Base",
@@ -51,4 +52,6 @@ __all__ = [
     "MemberRole",
     "IntegrationConfig",
     "IntegrationProvider",
+    "WorkflowExecution",
+    "WorkflowStatus",
 ]
