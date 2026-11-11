@@ -27,6 +27,7 @@ from backend.app.services.reliability_memory.remediation_learner import (
 from backend.app.services.predictive import PredictiveReliabilityEngine
 from backend.app.services.slo import SLOIntelligenceEngine
 from backend.app.services.time_machine import IncidentTimeMachineEngine
+from backend.app.services.agents import LangGraphReliabilityAgent
 
 router = APIRouter(prefix="/reliability", tags=["Reliability Intelligence"])
 
@@ -37,6 +38,11 @@ class MemorySearchRequest(BaseModel):
     severity: Optional[str] = Field(None, description="Filter by severity level (SEV-1, SEV-2, SEV-3, SEV-4)")
     root_cause_category: Optional[str] = Field(None, description="Filter by root cause category")
     limit: int = Field(20, ge=1, le=100, description="Maximum number of historical records to return")
+
+
+class AgentAssessmentRequest(BaseModel):
+    service_name: Optional[str] = Field(None, description="Target service to evaluate (defaults to order-service)")
+    incident_id: Optional[str] = Field(None, description="Optional active incident context ID")
 
 
 # ============================================================================
@@ -397,6 +403,47 @@ async def get_incident_causal_graph(
     """
     causal_state = await IncidentTimeMachineEngine.get_causal_graph_state(incident_id, phase, db)
     return causal_state.to_dict()
+
+
+# ============================================================================
+# STAGE 5.8: LANGGRAPH RELIABILITY AGENT ENDPOINTS
+# ============================================================================
+
+@router.post("/agent/assess")
+async def run_reliability_agent_assessment(
+    request: Optional[AgentAssessmentRequest] = None,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Trigger the 8-node LangGraph Autonomous Reliability Intelligence Agent to analyze
+    streaming metrics, anomalies, memory, regressions, predictive TTE, and SLO error budgets.
+    """
+    svc = request.service_name if request else None
+    inc = request.incident_id if request else None
+
+    result = await LangGraphReliabilityAgent.assess(
+        service_name=svc,
+        incident_id=inc,
+        db=db,
+    )
+    return result
+
+
+@router.get("/agent/last-run")
+async def get_agent_last_run(
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Retrieve the most recent LangGraph assessment state or trigger a baseline run.
+    """
+    cached = LangGraphReliabilityAgent.get_last_run()
+    if cached:
+        return cached
+
+    # Run baseline assessment
+    result = await LangGraphReliabilityAgent.assess(db=db)
+    return result
+
 
 
 
