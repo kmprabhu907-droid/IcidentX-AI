@@ -24,6 +24,7 @@ from backend.app.services.reliability_memory.remediation_learner import (
     RemediationLearner,
     SIDE_EFFECT_REGISTRY,
 )
+from backend.app.services.predictive import PredictiveReliabilityEngine
 
 router = APIRouter(prefix="/reliability", tags=["Reliability Intelligence"])
 
@@ -221,3 +222,65 @@ async def find_similar_incidents(
         "min_similarity": min_similarity,
         "similar_incidents": matches,
     }
+
+
+# ============================================================================
+# STAGE 5.5: PREDICTIVE RELIABILITY ENDPOINTS
+# ============================================================================
+
+@router.get("/predictions")
+async def get_active_predictions(
+    service_name: Optional[str] = Query(None, description="Optional service name filter"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Retrieve streaming resource trend models, growth rates, and Time-to-Exhaustion (TTE) projections.
+    """
+    preds = await PredictiveReliabilityEngine.get_active_predictions(
+        service_name=service_name,
+        db=db,
+    )
+    return {
+        "service_name": service_name or "all",
+        "count": len(preds),
+        "predictions": preds,
+    }
+
+
+@router.get("/forecast/{service_id}")
+async def get_service_forecast(
+    service_id: str,
+    metric_name: Optional[str] = Query(None, description="Specific metric to forecast"),
+    horizon_seconds: int = Query(1800, ge=60, le=7200, description="Forward projection horizon in seconds"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Generate forward forecast data points with 95% confidence intervals and exhaustion alerts.
+    """
+    # Map service_id to name if UUID provided
+    uuid_to_name = {v: k for k, v in demo_mesh.SERVICE_ID_MAP.items()}
+    target_name = uuid_to_name.get(service_id, service_id)
+
+    forecast = await PredictiveReliabilityEngine.get_service_forecast(
+        service_name=target_name,
+        metric_name=metric_name,
+        horizon_seconds=horizon_seconds,
+        db=db,
+    )
+    return forecast
+
+
+@router.get("/capacity-risk")
+async def get_capacity_risks(
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Synthesize cluster-wide capacity risks, ranked by shortest TTE and exhaustion hazard,
+    with prescriptive prevention recommendations.
+    """
+    risks = await PredictiveReliabilityEngine.get_capacity_risks(db=db)
+    return {
+        "count": len(risks),
+        "risks": risks,
+    }
+
