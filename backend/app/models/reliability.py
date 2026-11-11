@@ -155,3 +155,34 @@ class PredictiveWarning(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("idx_warning_service_time", "service_name", "emitted_at"),
     )
+
+
+class IncidentMemory(Base, UUIDMixin, TimestampMixin):
+    """
+    Stage 5.4: Persistent Reliability Memory index.
+    Stores pre-indexed fingerprints, confirmed lessons, side-effects, and
+    remediation effectiveness learning linked to historical incidents.
+    """
+    __tablename__ = "incident_memories"
+
+    incident_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    primary_service: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    affected_services: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="SEV-2")
+    fingerprint_vector: Mapped[str] = mapped_column(Text, nullable=False, default="{}")  # JSON dict of anomaly departures
+    error_signatures: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list of normalized strings
+    root_cause_category: Mapped[str] = mapped_column(String(100), nullable=False, default="UNKNOWN", index=True)
+    confirmed_root_cause: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    remediation_action_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON list
+    remediation_outcome: Mapped[str] = mapped_column(String(30), nullable=False, default="UNKNOWN")  # SUSTAINED_SUCCESS, TEMPORARY_SUCCESS, etc.
+    remediation_side_effects: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list of collateral side-effects
+    learned_lessons: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Structured recommendations for future incidents
+    search_vector: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Text corpus for keyword search
+
+    incident: Mapped["Incident"] = relationship("Incident")
+
+    __table_args__ = (
+        Index("idx_memory_service_category", "primary_service", "root_cause_category"),
+    )

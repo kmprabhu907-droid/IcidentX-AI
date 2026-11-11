@@ -70,6 +70,7 @@ async def run_phase5_migration():
             "anomaly_records",
             "regression_records",
             "predictive_warnings",
+            "incident_memories",
         ]
         for tbl in tables_to_check:
             try:
