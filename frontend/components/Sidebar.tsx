@@ -16,10 +16,12 @@ import {
   Scale,
   BrainCircuit,
   TestTube,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from "lucide-react";
 
 const NAV_ITEMS = [
+  { label: "Hackathon Command Center", href: "/showcase", icon: Sparkles },
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Reliability Command", href: "/reliability", icon: Activity },
   { label: "Incidents", href: "/incidents", icon: AlertTriangle },

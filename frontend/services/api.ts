@@ -438,6 +438,27 @@ export const api = {
     }
     return res;
   },
+
+  // Phase 7 Showcase Endpoints
+  getShowcaseScenarios: () =>
+    request<any[]>("/showcase/scenarios"),
+
+  launchShowcase: (scenarioId: string, autoApprove: boolean = true) =>
+    request<any>("/showcase/launch", {
+      method: "POST",
+      body: JSON.stringify({ scenario_id: scenarioId, auto_approve_if_required: autoApprove }),
+    }),
+
+  getShowcaseMultiAgentPipeline: (service?: string) => {
+    const q = service ? `?service=${service}` : "";
+    return request<any>(`/showcase/multi-agent-pipeline${q}`);
+  },
+
+  getShowcaseScorecard: () =>
+    request<any>("/showcase/scorecard"),
+
+  runRootCauseAccuracyBenchmark: () =>
+    request<any>("/showcase/benchmark-accuracy", { method: "POST" }),
 };
 
 export const reliabilityApi = {
@@ -520,6 +541,27 @@ export const reliabilityApi = {
 
   getAgentLastRun: () =>
     request<any>("/reliability/agent/last-run"),
+
+  // Phase 7 Showcase Endpoints
+  getShowcaseScenarios: () =>
+    request<any[]>("/showcase/scenarios"),
+
+  launchShowcase: (scenarioId: string, autoApprove: boolean = true) =>
+    request<any>("/showcase/launch", {
+      method: "POST",
+      body: JSON.stringify({ scenario_id: scenarioId, auto_approve_if_required: autoApprove }),
+    }),
+
+  getShowcaseMultiAgentPipeline: (service?: string) => {
+    const q = service ? `?service=${service}` : "";
+    return request<any>(`/showcase/multi-agent-pipeline${q}`);
+  },
+
+  getShowcaseScorecard: () =>
+    request<any>("/showcase/scorecard"),
+
+  runRootCauseAccuracyBenchmark: () =>
+    request<any>("/showcase/benchmark-accuracy", { method: "POST" }),
 };
 
 export const authApi = {
