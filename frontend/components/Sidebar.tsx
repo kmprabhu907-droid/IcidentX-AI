@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   ShieldAlert, 
+  ShieldCheck,
   LayoutDashboard, 
   AlertTriangle, 
   Server, 
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { label: "Regression Lab", href: "/regression", icon: RotateCcw },
   { label: "Failure Injection Lab", href: "/simulation", icon: Flame },
   { label: "Services & Topology", href: "/services", icon: Server },
+  { label: "Access & Security", href: "/login", icon: ShieldCheck },
   { label: "System Settings", href: "/settings", icon: Settings },
 ];
 

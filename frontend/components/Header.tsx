@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Activity, Bell, RefreshCw, Server, ShieldCheck } from "lucide-react";
 import { api } from "../services/api";
 import { SystemHealth } from "../types";
@@ -61,11 +62,15 @@ export function Header() {
           <RefreshCw className={`w-4 h-4 ${isChecking ? "animate-spin text-blue-400" : ""}`} />
         </button>
 
-        <div className="flex items-center space-x-2 pl-2 border-l border-slate-800">
-          <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-400 font-mono text-xs flex items-center justify-center font-bold">
-            SRE
+        <Link
+          href="/login"
+          title="Manage Enterprise Access & RBAC Profile"
+          className="flex items-center space-x-2 pl-2 border-l border-slate-800 hover:opacity-80 transition-opacity"
+        >
+          <div className="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-400 font-mono text-xs flex items-center justify-center font-bold">
+            SRE • AUTH
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

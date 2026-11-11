@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     ALLOWED_HOSTS: List[str] = ["*"]
 
-    # Enterprise Security Settings (Stage 6.1)
+    # Enterprise Security & Auth Settings (Stage 6.1 & 6.2)
     ENABLE_SECURITY_HEADERS: bool = True
     ENABLE_HSTS: bool = False
     ENABLE_RATE_LIMITING: bool = True
@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_MUTATION_RPM: int = 30
     RATE_LIMIT_SIMULATION_RPM: int = 15
     MAX_REQUEST_BODY_BYTES: int = 2 * 1024 * 1024  # 2 Megabytes
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     CSP_POLICY: str = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "

@@ -13,6 +13,7 @@ from backend.app.models.remediation import RemediationAction, RemediationPolicy
 from backend.app.models.audit import AuditLog
 from backend.app.models.slo import SLODefinition, SLOMeasurement
 from backend.app.models.reliability import AnomalyRecord, RegressionRecord, PredictiveWarning
+from backend.app.models.user import User, RefreshToken, UserRole
 
 __all__ = [
     "Base",
@@ -34,4 +35,7 @@ __all__ = [
     "AnomalyRecord",
     "RegressionRecord",
     "PredictiveWarning",
+    "User",
+    "RefreshToken",
+    "UserRole",
 ]

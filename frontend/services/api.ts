@@ -43,11 +43,13 @@ class ApiError extends Error {
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = typeof window !== "undefined" ? localStorage.getItem("incidentx_access_token") : null;
   try {
     const res = await fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options?.headers,
       },
     });
@@ -367,6 +369,47 @@ export const api = {
       "/observability/regressions/trigger",
       { method: "POST" }
     ),
+
+  // Auth & RBAC (Stage 6.2)
+  login: async (payload: { email: string; password: string }) => {
+    const res = await request<any>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (typeof window !== "undefined" && res.access_token) {
+      localStorage.setItem("incidentx_access_token", res.access_token);
+      localStorage.setItem("incidentx_refresh_token", res.refresh_token);
+      localStorage.setItem("incidentx_user", JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  register: async (payload: { email: string; password: string; full_name: string; role?: string; organization_id?: string }) => {
+    return request<any>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  logout: async () => {
+    const refreshToken = typeof window !== "undefined" ? localStorage.getItem("incidentx_refresh_token") : null;
+    if (refreshToken) {
+      try {
+        await request<any>("/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch (_) {}
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("incidentx_access_token");
+      localStorage.removeItem("incidentx_refresh_token");
+      localStorage.removeItem("incidentx_user");
+    }
+  },
+
+  getMe: () => request<any>("/auth/me"),
+  getRoles: () => request<any>("/auth/roles"),
 };
 
 export const reliabilityApi = {
@@ -449,4 +492,12 @@ export const reliabilityApi = {
 
   getAgentLastRun: () =>
     request<any>("/reliability/agent/last-run"),
+};
+
+export const authApi = {
+  login: api.login,
+  register: api.register,
+  logout: api.logout,
+  getMe: api.getMe,
+  getRoles: api.getRoles,
 };
