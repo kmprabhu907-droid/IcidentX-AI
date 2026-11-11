@@ -20,6 +20,7 @@ from backend.app.models.organization import (
     OrganizationTier,
     MemberRole,
 )
+from backend.app.models.integration import IntegrationConfig, IntegrationProvider
 
 __all__ = [
     "Base",
@@ -48,4 +49,6 @@ __all__ = [
     "OrganizationMembership",
     "OrganizationTier",
     "MemberRole",
+    "IntegrationConfig",
+    "IntegrationProvider",
 ]
