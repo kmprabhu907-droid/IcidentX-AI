@@ -26,6 +26,7 @@ from backend.app.services.reliability_memory.remediation_learner import (
 )
 from backend.app.services.predictive import PredictiveReliabilityEngine
 from backend.app.services.slo import SLOIntelligenceEngine
+from backend.app.services.time_machine import IncidentTimeMachineEngine
 
 router = APIRouter(prefix="/reliability", tags=["Reliability Intelligence"])
 
@@ -348,5 +349,54 @@ async def get_burn_rates(
         "count": len(burn_rates),
         "burn_rates": burn_rates,
     }
+
+
+# ============================================================================
+# STAGE 5.7: INCIDENT TIME MACHINE ENDPOINTS
+# ============================================================================
+
+@router.get("/time-machine/{incident_id}")
+async def get_incident_time_machine(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Reconstruct the complete chronological lifecycle of an incident, correlating
+    telemetry, anomalies, logs, traces, hypotheses, remediations, and causal graphs.
+    """
+    report = await IncidentTimeMachineEngine.build_incident_timeline(incident_id, db)
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Incident '{incident_id}' not found for Time Machine reconstruction.",
+        )
+    return report.to_dict()
+
+
+@router.get("/time-machine/{incident_id}/state-at/{timestamp}")
+async def get_incident_state_at_timestamp(
+    incident_id: str,
+    timestamp: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Point-in-time infrastructure metrics and operational health reconstruction for historical replay.
+    """
+    snapshot = await IncidentTimeMachineEngine.get_state_at_timestamp(incident_id, timestamp, db)
+    return snapshot.to_dict()
+
+
+@router.get("/time-machine/{incident_id}/causal-graph")
+async def get_incident_causal_graph(
+    incident_id: str,
+    phase: Optional[str] = Query(None, description="Optional lifecycle phase filter (e.g. DETECTION, MITIGATION)"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Retrieve topological NetworkX causal state, failure propagation paths, and blast radius scores.
+    """
+    causal_state = await IncidentTimeMachineEngine.get_causal_graph_state(incident_id, phase, db)
+    return causal_state.to_dict()
+
 
 
