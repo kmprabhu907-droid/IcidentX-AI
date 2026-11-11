@@ -40,10 +40,16 @@ async def lifespan(app: FastAPI):
     await observability_engine.start()
     logger.info("Observability and detection engine started.")
 
+    # Start continuous observability telemetry collector (Phase 5 Stage 5.1)
+    from backend.app.services.observability.collector import observability_collector
+    await observability_collector.start()
+    logger.info("Continuous telemetry collector started.")
+
     yield
 
     # Teardown sequence
     logger.info(f"Shutting down {settings.APP_NAME}...")
+    await observability_collector.stop()
     await observability_engine.stop()
     await engine.dispose()
     logger.info("Database connection engine disposed cleanly.")

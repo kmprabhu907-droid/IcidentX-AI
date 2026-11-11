@@ -109,7 +109,7 @@ def run_checks():
             "summary": "Verified integration test incident record.",
             "severity": "SEV-1",
             "status": "DETECTED",
-            "impact_scope": "payment-svc, checkout-cart"
+            "impact_scope": "payment-service, order-service"
         }
         r = client.post(f"{BACKEND_URL}/api/v1/incidents", json=payload)
         assert r.status_code == 201
@@ -206,22 +206,57 @@ def run_checks():
         print(f"  ✅ Remediation Execution OK: Action executed in {exec_data['execution_duration_ms']}ms. Empirical verification: {exec_data['verification_status']}")
 
         # 21. Telemetry Verification Report
-        print("\n[21/22] Testing Telemetry Verification Report (/verification)...")
+        print("\n[21/25] Testing Telemetry Verification Report (/verification)...")
         verif_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/remediation/actions/{action_db_id}/verification")
         assert verif_r.status_code == 200
         verif_data = verif_r.json()
         assert "verification_report" in verif_data
         print(f"  ✅ Verification Report OK: Before vs after telemetry delta confirmed for service '{verif_data['target_service']}'")
 
-        # 22. Check Frontend Pages
-        print("\n[22/22] Testing Next.js Frontend Server Pages...")
+        # 22. Phase 5 Stage 5.1: Ten Golden Reliability Signals
+        print("\n[22/25] Testing Phase 5 Ten Golden Reliability Signals (/telemetry/signals)...")
+        signals_r = client.get(f"{BACKEND_URL}/api/v1/telemetry/signals")
+        assert signals_r.status_code == 200
+        signals_data = signals_r.json()
+        assert signals_data["total_services"] == 7
+        order_signals = signals_data["services"]["order-service"]
+        assert "cpu_utilization" in order_signals
+        assert "disk_utilization" in order_signals
+        assert "network_throughput_mbps" in order_signals
+        assert "availability_pct" in order_signals
+        assert "dependency_health" in order_signals
+        assert "request_rate" in order_signals
+        print(f"  ✅ Ten Golden Signals OK: 7 Services monitored. Availability={order_signals['availability_pct']}%, Disk={order_signals['disk_utilization']}%, Net={order_signals['network_throughput_mbps']} MB/s")
+
+        # 23. Phase 5 Stage 5.1: Collector Status & Health
+        print("\n[23/25] Testing Continuous Telemetry Collector Status (/telemetry/collector/status)...")
+        collector_r = client.get(f"{BACKEND_URL}/api/v1/telemetry/collector/status")
+        assert collector_r.status_code == 200
+        col_status = collector_r.json()
+        assert col_status["collector_status"] in ["RUNNING", "IDLE"]
+        assert col_status["monitored_services_count"] == 7
+        print(f"  ✅ Continuous Collector OK: Status={col_status['collector_status']}, Total Samples={col_status['buffer_stats']['total_samples_collected']}")
+
+        # 24. Phase 5 Stage 5.1: Historical 1-Minute Metric Rollups
+        print("\n[24/25] Testing Historical Metric Rollup Storage (/telemetry/metrics/history)...")
+        # Ensure at least one flush has run
+        client.post(f"{BACKEND_URL}/api/v1/telemetry/collector/flush")
+        history_r = client.get(f"{BACKEND_URL}/api/v1/telemetry/metrics/history?page_size=5")
+        assert history_r.status_code == 200
+        history_data = history_r.json()
+        assert history_data["total"] >= 1
+        assert len(history_data["rollups"]) >= 1
+        print(f"  ✅ Historical Rollups OK: Total stored rollups={history_data['total']}, Page 1 count={len(history_data['rollups'])}")
+
+        # 25. Check Frontend Pages
+        print("\n[25/25] Testing Next.js Frontend Server Pages...")
         for path in ["/", "/remediation", "/telemetry", "/simulation", "/incidents", f"/incidents/{incident_id}", "/services"]:
             front_r = client.get(f"{FRONTEND_URL}{path}")
             assert front_r.status_code == 200
         print("  ✅ All 7 Next.js Pages Responding cleanly (HTTP 200)")
 
     print("\n" + "=" * 60)
-    print("🎉 ALL 22 INTEGRATION CHECKS PASSED PERFECTLY!")
+    print("🎉 ALL 25 INTEGRATION CHECKS PASSED PERFECTLY!")
     print("=" * 60)
 
 

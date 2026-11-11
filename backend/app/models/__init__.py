@@ -1,16 +1,18 @@
 """
 INCIDENTX AI - Models Package Index
-Exports all 9 foundational SQLAlchemy entities.
+Exports all foundational and Phase 5 SQLAlchemy entities.
 """
 
 from backend.app.core.database import Base
 from backend.app.models.incident import Incident
 from backend.app.models.service import Service, ServiceDependency
-from backend.app.models.telemetry import TelemetryEvent
+from backend.app.models.telemetry import TelemetryEvent, MetricRollup
 from backend.app.models.investigation import AgentExecution, Evidence, RootCauseHypothesis, InvestigationPlan
 from backend.app.models.timeline import TimelineEvent
 from backend.app.models.remediation import RemediationAction, RemediationPolicy
 from backend.app.models.audit import AuditLog
+from backend.app.models.slo import SLODefinition, SLOMeasurement
+from backend.app.models.reliability import AnomalyRecord, RegressionRecord, PredictiveWarning
 
 __all__ = [
     "Base",
@@ -18,6 +20,7 @@ __all__ = [
     "Service",
     "ServiceDependency",
     "TelemetryEvent",
+    "MetricRollup",
     "AgentExecution",
     "Evidence",
     "RootCauseHypothesis",
@@ -26,4 +29,9 @@ __all__ = [
     "RemediationAction",
     "RemediationPolicy",
     "AuditLog",
+    "SLODefinition",
+    "SLOMeasurement",
+    "AnomalyRecord",
+    "RegressionRecord",
+    "PredictiveWarning",
 ]

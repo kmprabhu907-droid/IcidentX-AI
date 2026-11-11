@@ -138,7 +138,20 @@ class LogRecord:
 
 
 class ServiceMetricSnapshot:
-    """1-second resolution point-in-time metrics for a microservice."""
+    """
+    1-second resolution point-in-time metrics for a microservice.
+    Expanded in Phase 5 to deliver all 10 Golden Reliability Signals:
+    1. CPU utilization (%)
+    2. Memory utilization (%)
+    3. Disk utilization (%)
+    4. Network throughput (MB/s)
+    5. Request latency (P50, P95, P99 ms)
+    6. HTTP error rate (%)
+    7. Database connection-pool utilization (%)
+    8. Service availability (%)
+    9. Dependency health score (%)
+    10. Request throughput (RPS)
+    """
     def __init__(
         self,
         timestamp: datetime,
@@ -154,10 +167,17 @@ class ServiceMetricSnapshot:
         memory_utilization: float,
         db_pool_utilization: float,
         health_status: str = "HEALTHY",
-        data_source: str = "LIVE",
+        data_source: str = "SIMULATED",
+        # Phase 5 Ten-Signal Extensions
+        service_id: Optional[str] = None,
+        disk_utilization: float = 30.0,
+        network_throughput_mbps: float = 10.0,
+        availability_pct: float = 100.0,
+        dependency_health: float = 100.0,
     ):
         self.timestamp = timestamp
         self.service_name = service_name
+        self.service_id = service_id or str(uuid.uuid5(uuid.NAMESPACE_DNS, service_name))
         self.request_count = request_count
         self.request_rate = round(request_rate, 2)
         self.error_count = error_count
@@ -168,12 +188,17 @@ class ServiceMetricSnapshot:
         self.cpu_utilization = round(cpu_utilization, 2)
         self.memory_utilization = round(memory_utilization, 2)
         self.db_pool_utilization = round(db_pool_utilization, 2)
+        self.disk_utilization = round(disk_utilization, 2)
+        self.network_throughput_mbps = round(network_throughput_mbps, 2)
+        self.availability_pct = round(availability_pct, 2)
+        self.dependency_health = round(dependency_health, 2)
         self.health_status = health_status
         self.data_source = data_source
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "timestamp": self.timestamp.isoformat(),
+            "service_id": self.service_id,
             "service_name": self.service_name,
             "request_count": self.request_count,
             "request_rate": self.request_rate,
@@ -184,7 +209,11 @@ class ServiceMetricSnapshot:
             "latency_p99_ms": self.latency_p99_ms,
             "cpu_utilization": self.cpu_utilization,
             "memory_utilization": self.memory_utilization,
+            "disk_utilization": self.disk_utilization,
+            "network_throughput_mbps": self.network_throughput_mbps,
             "db_pool_utilization": self.db_pool_utilization,
+            "availability_pct": self.availability_pct,
+            "dependency_health": self.dependency_health,
             "health_status": self.health_status,
             "data_source": self.data_source,
         }
@@ -203,6 +232,17 @@ class DemoMesh:
     - redis-cache
     """
 
+    SERVICE_ID_MAP = {
+        "order-service": "e807c9f6-ea2b-426c-89bb-d63a08dca858",
+        "inventory-db": "4f75f224-6132-4f44-8839-a97f74848738",
+        "api-gateway": "488832cd-c3ca-487c-9609-73e1a5bbf1f8",
+        "auth-service": "3e84246d-61e1-47ba-97ba-7bd08956898b",
+        "payment-service": "6442e306-f7af-473f-a384-9962462db03c",
+        "inventory-service": "9a5b88c4-c17c-4f72-869f-7a1fde0a3f22",
+        "postgres-db": "823374bc-d4e1-4708-bd6d-d8eb63428914",
+        "redis-cache": "8abc7410-272c-4057-adea-271255943eca",
+    }
+
     SERVICE_DEFINITIONS = {
         "api-gateway": {
             "tier": "Tier-1",
@@ -213,6 +253,8 @@ class DemoMesh:
             "base_p50": 35.0,
             "base_cpu": 22.0,
             "base_mem": 42.0,
+            "base_disk": 32.0,
+            "base_net_mbps": 16.5,
         },
         "auth-service": {
             "tier": "Tier-1",
@@ -223,6 +265,8 @@ class DemoMesh:
             "base_p50": 15.0,
             "base_cpu": 18.0,
             "base_mem": 35.0,
+            "base_disk": 26.0,
+            "base_net_mbps": 9.2,
         },
         "order-service": {
             "tier": "Tier-1",
@@ -233,6 +277,8 @@ class DemoMesh:
             "base_p50": 45.0,
             "base_cpu": 28.0,
             "base_mem": 52.0,
+            "base_disk": 38.0,
+            "base_net_mbps": 8.0,
         },
         "payment-service": {
             "tier": "Tier-1",
@@ -243,6 +289,8 @@ class DemoMesh:
             "base_p50": 55.0,
             "base_cpu": 20.0,
             "base_mem": 40.0,
+            "base_disk": 28.0,
+            "base_net_mbps": 5.5,
         },
         "inventory-service": {
             "tier": "Tier-2",
@@ -253,6 +301,8 @@ class DemoMesh:
             "base_p50": 25.0,
             "base_cpu": 25.0,
             "base_mem": 48.0,
+            "base_disk": 34.0,
+            "base_net_mbps": 7.8,
         },
         "postgres-db": {
             "tier": "Tier-1",
@@ -263,6 +313,8 @@ class DemoMesh:
             "base_p50": 8.0,
             "base_cpu": 30.0,
             "base_mem": 65.0,
+            "base_disk": 62.0,
+            "base_net_mbps": 24.0,
         },
         "redis-cache": {
             "tier": "Tier-2",
@@ -273,6 +325,8 @@ class DemoMesh:
             "base_p50": 2.0,
             "base_cpu": 12.0,
             "base_mem": 38.0,
+            "base_disk": 16.0,
+            "base_net_mbps": 14.0,
         },
     }
 
@@ -326,10 +380,16 @@ class DemoMesh:
                 cpu = min(100.0, max(5.0, defs["base_cpu"] + jitter))
                 mem = min(100.0, max(10.0, defs["base_mem"] + random.uniform(-1.0, 1.0)))
                 db_pool = 15.0 + random.uniform(-2.0, 3.0) if "db" in svc_name or svc_name == "order-service" else 0.0
+                disk = min(100.0, max(5.0, defs.get("base_disk", 30.0) + random.uniform(-0.2, 0.2)))
+                net_mbps = max(0.1, round((defs.get("base_net_mbps", 10.0) * (rps / max(1.0, defs["base_rps"]))) + random.uniform(-0.2, 0.2), 2))
+                availability = 100.0 - min(0.05, err_rate)
+                dep_health = 100.0
+                service_id = self.SERVICE_ID_MAP.get(svc_name, str(uuid.uuid5(uuid.NAMESPACE_DNS, svc_name)))
 
                 snapshot = ServiceMetricSnapshot(
                     timestamp=t,
                     service_name=svc_name,
+                    service_id=service_id,
                     request_count=int(rps),
                     request_rate=rps,
                     error_count=err_count,
@@ -340,8 +400,12 @@ class DemoMesh:
                     cpu_utilization=cpu,
                     memory_utilization=mem,
                     db_pool_utilization=db_pool,
+                    disk_utilization=disk,
+                    network_throughput_mbps=net_mbps,
+                    availability_pct=availability,
+                    dependency_health=dep_health,
                     health_status="HEALTHY",
-                    data_source="LIVE",
+                    data_source="SIMULATED",
                 )
                 self.metrics_history[svc_name].append(snapshot)
 
@@ -597,9 +661,44 @@ class DemoMesh:
                 error_rate = min(100.0, max(0.0, error_rate))
                 err_count = int(rps * (error_rate / 100.0))
 
+                # Phase 5 Golden Signals calculation
+                disk = defs.get("base_disk", 30.0) + random.uniform(-0.5, 0.5)
+                if db_exhaustion and svc_name == "postgres-db":
+                    disk = min(98.0, disk + 28.0)
+                disk = min(100.0, max(0.0, disk))
+
+                net_mbps = max(0.0, round((defs.get("base_net_mbps", 10.0) * (rps / max(1.0, defs["base_rps"]))) + random.uniform(-0.5, 0.5), 2))
+
+                if instance_dead_target == svc_name or (rps == 0.0 and svc_name != "postgres-db"):
+                    availability = 0.0
+                elif health == "HEALTHY":
+                    availability = round(max(0.0, min(100.0, 100.0 - min(0.1, error_rate))), 2)
+                elif health == "DEGRADED":
+                    availability = round(max(0.0, min(100.0, 100.0 - (error_rate * 0.7))), 2)
+                else:
+                    availability = round(max(0.0, min(100.0, 100.0 - error_rate)), 2)
+
+                # Dependency health calculation
+                if payment_latency_ms > 0:
+                    if svc_name == "order-service":
+                        dep_health = 25.0
+                    elif svc_name == "api-gateway":
+                        dep_health = 45.0
+                    else:
+                        dep_health = 100.0
+                elif db_exhaustion and svc_name in ["order-service", "payment-service", "inventory-service"]:
+                    dep_health = 15.0
+                elif redis_down and svc_name in ["auth-service", "inventory-service"]:
+                    dep_health = 40.0
+                else:
+                    dep_health = 100.0 if health == "HEALTHY" else (70.0 if health == "DEGRADED" else 40.0)
+
+                service_id = self.SERVICE_ID_MAP.get(svc_name, str(uuid.uuid5(uuid.NAMESPACE_DNS, svc_name)))
+
                 snapshot = ServiceMetricSnapshot(
                     timestamp=now,
                     service_name=svc_name,
+                    service_id=service_id,
                     request_count=int(rps),
                     request_rate=rps,
                     error_count=err_count,
@@ -610,6 +709,10 @@ class DemoMesh:
                     cpu_utilization=cpu,
                     memory_utilization=mem,
                     db_pool_utilization=db_pool,
+                    disk_utilization=disk,
+                    network_throughput_mbps=net_mbps,
+                    availability_pct=availability,
+                    dependency_health=dep_health,
                     health_status=health,
                     data_source=data_source,
                 )
