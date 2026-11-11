@@ -28,6 +28,8 @@ else:
     engine_kwargs["pool_size"] = settings.DATABASE_POOL_SIZE
     engine_kwargs["max_overflow"] = settings.DATABASE_MAX_OVERFLOW
     engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 1800
+    engine_kwargs["pool_timeout"] = 30
 
 engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
