@@ -317,3 +317,112 @@ export interface TimelineView {
   total_events: number;
   events: TimelineEvent[];
 }
+
+// ==========================================
+// Phase 4: Safe Autonomous Remediation & Self-Healing Types
+// ==========================================
+
+export type ExecutionMode = "RECOMMENDATION_ONLY" | "HUMAN_APPROVAL" | "CONTROLLED_AUTONOMOUS";
+export type ActionRiskLevel = "LOW" | "MEDIUM" | "HIGH";
+export type ActionStatus = "PROPOSED" | "APPROVED" | "REJECTED" | "EXECUTING" | "EXECUTED" | "FAILED" | "CANCELLED";
+export type ActionApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "NOT_REQUIRED";
+export type RecoveryVerificationStatus = "PENDING" | "VERIFIED" | "PARTIALLY_VERIFIED" | "FAILED" | "INCONCLUSIVE";
+export type ActionRollbackStatus = "NONE" | "AVAILABLE" | "EXECUTING" | "ROLLED_BACK" | "ROLLBACK_FAILED";
+
+export interface RemediationAction {
+  id: string;
+  incident_id: string;
+  hypothesis_id?: string | null;
+  action_id: string;
+  name: string;
+  description: string;
+  action_type: string;
+  target_service_name: string;
+  parameters: string;
+  preconditions: string;
+  expected_outcome: string;
+  risk_level: ActionRiskLevel;
+  risk_tier: string;
+  estimated_cost: string;
+  expected_benefit: number;
+  recommendation_reason: string;
+  contraindications: string;
+  execution_mode: ExecutionMode;
+  idempotency_key: string;
+  timeout_seconds: number;
+  approval_status: ActionApprovalStatus;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approval_comment?: string | null;
+  status: ActionStatus;
+  command_payload: string;
+  executed_at?: string | null;
+  execution_duration_ms?: number | null;
+  execution_log?: string | null;
+  snapshot_before?: string | null;
+  snapshot_after?: string | null;
+  verification_status: RecoveryVerificationStatus;
+  verification_details?: string | null;
+  rollback_status: ActionRollbackStatus;
+  rollback_log?: string | null;
+  error_message?: string | null;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemediationPolicy {
+  id: string;
+  name: string;
+  mode: ExecutionMode;
+  is_autonomous_enabled: boolean;
+  allowlisted_action_ids: string;
+  max_actions_per_incident: number;
+  max_retries: number;
+  cooldown_seconds: number;
+  circuit_breaker_tripped: boolean;
+  circuit_breaker_reason?: string | null;
+  emergency_stop_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActionRegistryItem {
+  action_id: string;
+  name: string;
+  description: string;
+  action_type: string;
+  supported_incident_types: string[];
+  risk_level: ActionRiskLevel;
+  estimated_cost: string;
+  timeout_seconds: number;
+  parameter_schema: Record<string, any>;
+}
+
+export interface MetricDelta {
+  before: number;
+  after: number;
+  delta: number;
+}
+
+export interface VerificationReport {
+  service_name: string;
+  verification_status: RecoveryVerificationStatus;
+  metrics: {
+    error_rate: MetricDelta;
+    latency_p95_ms: MetricDelta;
+    cpu_utilization: MetricDelta;
+    memory_utilization: MetricDelta;
+    db_pool_utilization: MetricDelta;
+    health_status: { before: string; after: string };
+  };
+  is_recovery_confirmed: boolean;
+  timestamp: string;
+}
+
+export interface RemediationRecommendationsResponse {
+  incident_id: string;
+  total_recommendations: number;
+  actions: RemediationAction[];
+  disclaimer: string;
+}

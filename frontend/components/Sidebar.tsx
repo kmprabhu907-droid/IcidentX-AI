@@ -20,6 +20,7 @@ import {
 const NAV_ITEMS = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Incidents", href: "/incidents", icon: AlertTriangle },
+  { label: "Remediation Engine", href: "/remediation", icon: BrainCircuit },
   { label: "Telemetry Explorer", href: "/telemetry", icon: Radio },
   { label: "Failure Injection Lab", href: "/simulation", icon: Flame },
   { label: "Services & Topology", href: "/services", icon: Server },

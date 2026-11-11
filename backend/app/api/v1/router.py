@@ -11,6 +11,7 @@ from backend.app.api.v1.health import router as health_router
 from backend.app.api.v1.observability import router as observability_router
 from backend.app.api.v1.telemetry import router as telemetry_router
 from backend.app.api.v1.simulation import router as simulation_router
+from backend.app.api.v1.remediation import router as remediation_router
 
 api_v1_router = APIRouter()
 
@@ -22,3 +23,4 @@ api_v1_router.include_router(audit_router)
 api_v1_router.include_router(observability_router)
 api_v1_router.include_router(telemetry_router)
 api_v1_router.include_router(simulation_router)
+api_v1_router.include_router(remediation_router)

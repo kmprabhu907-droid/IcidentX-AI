@@ -19,6 +19,11 @@ import {
   InvestigationPlanView,
   InvestigationStatus,
   TimelineView,
+  RemediationAction,
+  RemediationPolicy,
+  ActionRegistryItem,
+  VerificationReport,
+  RemediationRecommendationsResponse,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -168,6 +173,76 @@ export const api = {
     request<PaginatedResponse<RootCauseHypothesis>>(`/incidents/${incidentId}/hypotheses`),
   getIncidentAgentExecutions: (incidentId: string) =>
     request<PaginatedResponse<AgentExecution>>(`/incidents/${incidentId}/agent-executions`),
+
+  // Phase 4: Safe Autonomous Remediation & Self-Healing
+  getRemediationRegistry: () =>
+    request<ActionRegistryItem[]>("/remediation/registry"),
+  getRemediationPolicy: () =>
+    request<RemediationPolicy>("/remediation/policy"),
+  updateRemediationPolicy: (payload: { mode?: string; is_autonomous_enabled?: boolean; allowlisted_action_ids?: string[]; max_actions_per_incident?: number }) =>
+    request<RemediationPolicy>("/remediation/policy", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  triggerEmergencyStop: (reason?: string, requestedBy?: string) =>
+    request<RemediationPolicy>("/remediation/emergency-stop", {
+      method: "POST",
+      body: JSON.stringify({
+        reason: reason || "Manual operator emergency stop",
+        requested_by: requestedBy || "operator",
+      }),
+    }),
+  resetCircuitBreaker: () =>
+    request<RemediationPolicy>("/remediation/reset-circuit-breaker", {
+      method: "POST",
+    }),
+  getIncidentRemediationRecommendations: (incidentId: string) =>
+    request<RemediationRecommendationsResponse>(
+      `/incidents/${incidentId}/remediation/recommendations`
+    ),
+  triggerRemediationRecommendations: (incidentId: string) =>
+    request<{ incident_id: string; generated_count: number; actions: RemediationAction[] }>(
+      `/incidents/${incidentId}/remediation/recommend`,
+      { method: "POST" }
+    ),
+  listIncidentRemediationActions: (incidentId: string) =>
+    request<RemediationAction[]>(`/incidents/${incidentId}/remediation/actions`),
+  approveRemediationAction: (incidentId: string, actionId: string, payload: { approved_by: string; comment?: string }) =>
+    request<RemediationAction>(
+      `/incidents/${incidentId}/remediation/actions/${actionId}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
+  rejectRemediationAction: (incidentId: string, actionId: string, payload: { rejected_by: string; reason: string }) =>
+    request<RemediationAction>(
+      `/incidents/${incidentId}/remediation/actions/${actionId}/reject`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
+  executeRemediationAction: (incidentId: string, actionId: string, isAutonomous = false) =>
+    request<RemediationAction>(
+      `/incidents/${incidentId}/remediation/actions/${actionId}/execute?is_autonomous=${isAutonomous}`,
+      { method: "POST" }
+    ),
+  rollbackRemediationAction: (incidentId: string, actionId: string, operator = "operator") =>
+    request<RemediationAction>(
+      `/incidents/${incidentId}/remediation/actions/${actionId}/rollback?operator=${operator}`,
+      { method: "POST" }
+    ),
+  getActionVerificationReport: (incidentId: string, actionId: string) =>
+    request<{
+      action_id: string;
+      action_name: string;
+      target_service: string;
+      execution_status: string;
+      verification_status: string;
+      verification_report: VerificationReport;
+      raw_verification_details: any;
+    }>(`/incidents/${incidentId}/remediation/actions/${actionId}/verification`),
 
   // Audit Logs
   listAuditLogs: (page = 1, pageSize = 50) =>

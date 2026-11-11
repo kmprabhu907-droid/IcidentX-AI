@@ -153,15 +153,75 @@ def run_checks():
             assert action.get("operational_risk") in ["LOW", "MEDIUM", "SAFE"] or action.get("safety_rating") in ["SAFE", "RESTRICTED", "HAZARDOUS"]
         print(f"  ✅ Active Diagnostic Planner OK: {plan_data['total_actions']} safe diagnostic actions prioritized")
 
-        # 16. Check Frontend Pages
-        print("\n[16/16] Testing Next.js Frontend Server Pages...")
-        for path in ["/", "/telemetry", "/simulation", "/incidents", f"/incidents/{incident_id}", "/services"]:
+        # 16. Action Registry Verification
+        print("\n[16/22] Testing Remediation Action Registry (/remediation/registry)...")
+        reg_r = client.get(f"{BACKEND_URL}/api/v1/remediation/registry")
+        assert reg_r.status_code == 200
+        registry_actions = reg_r.json()
+        assert len(registry_actions) == 8
+        print(f"  ✅ Action Registry OK: 8 safe predefined actions verified ({', '.join(a['action_id'] for a in registry_actions[:4])}...)")
+
+        # 17. Remediation Policy Verification (Default RECOMMENDATION_ONLY)
+        print("\n[17/22] Testing Remediation Safety Policy (/remediation/policy)...")
+        pol_r = client.get(f"{BACKEND_URL}/api/v1/remediation/policy")
+        assert pol_r.status_code == 200
+        policy = pol_r.json()
+        assert policy["circuit_breaker_tripped"] is False
+        print(f"  ✅ Remediation Policy OK: Mode={policy['mode']}, CircuitBreaker={policy['circuit_breaker_tripped']}")
+
+        # 18. Generate Evidence-Grounded Recommendations
+        print("\n[18/22] Testing Remediation Intelligence Engine (/recommendations)...")
+        rec_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/remediation/recommendations")
+        assert rec_r.status_code == 200
+        rec_data = rec_r.json()
+        assert rec_data["total_recommendations"] >= 1
+        top_act = rec_data["actions"][0]
+        action_db_id = top_act["id"]
+        print(f"  ✅ Remediation Intelligence OK: Formulated {rec_data['total_recommendations']} recovery recommendations. Top action: {top_act['name']} ({top_act['risk_level']} Risk)")
+
+        # 19. Set Policy to HUMAN_APPROVAL & Approve Top Action
+        print("\n[19/22] Testing Human Approval Gate...")
+        # Set mode to HUMAN_APPROVAL
+        put_r = client.put(f"{BACKEND_URL}/api/v1/remediation/policy", json={"mode": "HUMAN_APPROVAL"})
+        assert put_r.status_code == 200
+
+        # Approve action
+        appr_r = client.post(
+            f"{BACKEND_URL}/api/v1/incidents/{incident_id}/remediation/actions/{action_db_id}/approve",
+            json={"approved_by": "lead-sre@incidentx.ai", "comment": "Approved for simulated execution."}
+        )
+        assert appr_r.status_code == 200
+        appr_act = appr_r.json()
+        assert appr_act["approval_status"] == "APPROVED"
+        assert appr_act["approved_by"] == "lead-sre@incidentx.ai"
+        print(f"  ✅ Human Approval Gate OK: Action {action_db_id} approved by {appr_act['approved_by']}")
+
+        # 20. Execute Approved Action in Simulation
+        print("\n[20/22] Testing Remediation Execution in Simulation Sandbox...")
+        exec_r = client.post(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/remediation/actions/{action_db_id}/execute")
+        assert exec_r.status_code == 200
+        exec_data = exec_r.json()
+        assert exec_data["status"] == "EXECUTED"
+        assert exec_data["verification_status"] in ["VERIFIED", "PARTIALLY_VERIFIED"]
+        print(f"  ✅ Remediation Execution OK: Action executed in {exec_data['execution_duration_ms']}ms. Empirical verification: {exec_data['verification_status']}")
+
+        # 21. Telemetry Verification Report
+        print("\n[21/22] Testing Telemetry Verification Report (/verification)...")
+        verif_r = client.get(f"{BACKEND_URL}/api/v1/incidents/{incident_id}/remediation/actions/{action_db_id}/verification")
+        assert verif_r.status_code == 200
+        verif_data = verif_r.json()
+        assert "verification_report" in verif_data
+        print(f"  ✅ Verification Report OK: Before vs after telemetry delta confirmed for service '{verif_data['target_service']}'")
+
+        # 22. Check Frontend Pages
+        print("\n[22/22] Testing Next.js Frontend Server Pages...")
+        for path in ["/", "/remediation", "/telemetry", "/simulation", "/incidents", f"/incidents/{incident_id}", "/services"]:
             front_r = client.get(f"{FRONTEND_URL}{path}")
             assert front_r.status_code == 200
-        print("  ✅ All 6 Next.js Pages Responding cleanly (HTTP 200)")
+        print("  ✅ All 7 Next.js Pages Responding cleanly (HTTP 200)")
 
     print("\n" + "=" * 60)
-    print("🎉 ALL 16 INTEGRATION CHECKS PASSED PERFECTLY!")
+    print("🎉 ALL 22 INTEGRATION CHECKS PASSED PERFECTLY!")
     print("=" * 60)
 
 

@@ -33,6 +33,9 @@ import {
   XCircle,
   ShieldAlert,
   ListChecks,
+  BrainCircuit,
+  RotateCcw,
+  UserCheck,
 } from "lucide-react";
 import { api } from "../../../services/api";
 import {
@@ -46,6 +49,8 @@ import {
   InvestigationPlanView,
   DiagnosticAction,
   InvestigationStatus,
+  RemediationAction,
+  RemediationPolicy,
 } from "../../../types";
 
 const INVESTIGATION_AGENTS = [
@@ -78,8 +83,17 @@ export default function IncidentDetailPage({
   const [planner, setPlanner] = useState<InvestigationPlanView | null>(null);
   const [investigationStatus, setInvestigationStatus] = useState<InvestigationStatus | null>(null);
 
+  // Phase 4 Remediation State
+  const [remediationActions, setRemediationActions] = useState<RemediationAction[]>([]);
+  const [remediationPolicy, setRemediationPolicy] = useState<RemediationPolicy | null>(null);
+  const [actionOperating, setActionOperating] = useState(false);
+  const [approvalModalAction, setApprovalModalAction] = useState<RemediationAction | null>(null);
+  const [approvalOperatorName, setApprovalOperatorName] = useState("alice@incidentx.ai");
+  const [approvalComment, setApprovalComment] = useState("");
+  const [verificationModalAction, setVerificationModalAction] = useState<RemediationAction | null>(null);
+
   const [activeTab, setActiveTab] = useState<
-    "overview" | "courtroom" | "timeline" | "evidence" | "planner" | "agents"
+    "overview" | "courtroom" | "timeline" | "evidence" | "planner" | "agents" | "remediation"
   >("overview");
   const [loading, setLoading] = useState(true);
   const [investigating, setInvestigating] = useState(false);
@@ -103,6 +117,8 @@ export default function IncidentDetailPage({
         timelineRes,
         plannerRes,
         statusRes,
+        remRes,
+        polRes,
       ] = await Promise.all([
         api.getIncident(incidentId),
         api.getIncidentEvidence(incidentId).catch(() => ({ items: [], total: 0 })),
@@ -112,6 +128,8 @@ export default function IncidentDetailPage({
         api.getTimeline(incidentId).catch(() => ({ incident_id: incidentId, total_events: 0, events: [] })),
         api.getPlanner(incidentId).catch(() => null),
         api.getInvestigationStatus(incidentId).catch(() => null),
+        api.listIncidentRemediationActions(incidentId).catch(() => []),
+        api.getRemediationPolicy().catch(() => null),
       ]);
 
       setIncident(inc);
@@ -122,6 +140,8 @@ export default function IncidentDetailPage({
       setTimelineEvents(timelineRes?.events || []);
       setPlanner(plannerRes);
       setInvestigationStatus(statusRes);
+      setRemediationActions(remRes);
+      setRemediationPolicy(polRes);
     } catch (err: any) {
       setError(err.message || "Failed to load incident investigation details.");
     } finally {
@@ -143,6 +163,88 @@ export default function IncidentDetailPage({
       alert(`Investigation failed: ${err.message}`);
     } finally {
       setInvestigating(false);
+    }
+  };
+
+  const handleGenerateRecommendations = async () => {
+    setActionOperating(true);
+    try {
+      await api.triggerRemediationRecommendations(incidentId);
+      const updated = await api.listIncidentRemediationActions(incidentId);
+      setRemediationActions(updated);
+    } catch (err: any) {
+      alert(`Failed to formulate remediation recommendations: ${err.message}`);
+    } finally {
+      setActionOperating(false);
+    }
+  };
+
+  const handleApproveAction = async () => {
+    if (!approvalModalAction) return;
+    setActionOperating(true);
+    try {
+      await api.approveRemediationAction(incidentId, approvalModalAction.id, {
+        approved_by: approvalOperatorName,
+        comment: approvalComment || undefined,
+      });
+      setApprovalModalAction(null);
+      const updated = await api.listIncidentRemediationActions(incidentId);
+      setRemediationActions(updated);
+    } catch (err: any) {
+      alert(`Approval failed: ${err.message}`);
+    } finally {
+      setActionOperating(false);
+    }
+  };
+
+  const handleRejectAction = async (action: RemediationAction) => {
+    const reason = prompt("Enter justification for rejecting this recovery action:");
+    if (!reason) return;
+    setActionOperating(true);
+    try {
+      await api.rejectRemediationAction(incidentId, action.id, {
+        rejected_by: approvalOperatorName,
+        reason: reason,
+      });
+      const updated = await api.listIncidentRemediationActions(incidentId);
+      setRemediationActions(updated);
+    } catch (err: any) {
+      alert(`Rejection failed: ${err.message}`);
+    } finally {
+      setActionOperating(false);
+    }
+  };
+
+  const handleExecuteAction = async (action: RemediationAction) => {
+    setActionOperating(true);
+    try {
+      await api.executeRemediationAction(incidentId, action.id);
+      const updated = await api.listIncidentRemediationActions(incidentId);
+      setRemediationActions(updated);
+      const executed = updated.find((a) => a.id === action.id);
+      if (executed) {
+        setVerificationModalAction(executed);
+      }
+    } catch (err: any) {
+      alert(`Remediation execution failed: ${err.message}`);
+      await loadIncidentData();
+    } finally {
+      setActionOperating(false);
+    }
+  };
+
+  const handleRollbackAction = async (action: RemediationAction) => {
+    if (!confirm(`Are you sure you want to rollback ${action.name}?`)) return;
+    setActionOperating(true);
+    try {
+      await api.rollbackRemediationAction(incidentId, action.id, approvalOperatorName);
+      const updated = await api.listIncidentRemediationActions(incidentId);
+      setRemediationActions(updated);
+      alert(`Action ${action.name} successfully rolled back.`);
+    } catch (err: any) {
+      alert(`Rollback failed: ${err.message}`);
+    } finally {
+      setActionOperating(false);
     }
   };
 
@@ -375,6 +477,19 @@ export default function IncidentDetailPage({
           <Bot className="w-3.5 h-3.5" />
           <span>Agent Activity ({agentExecutions.length})</span>
         </button>
+
+        {/* Phase 4 Tab */}
+        <button
+          onClick={() => setActiveTab("remediation")}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-mono font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === "remediation"
+              ? "border-rose-500 text-rose-400 bg-rose-500/5"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <BrainCircuit className="w-3.5 h-3.5 text-rose-400" />
+          <span>Self-Healing &amp; Remediation ({remediationActions.length})</span>
+        </button>
       </div>
 
       {/* Tab 1: Executive Summary & Postmortem */}
@@ -475,8 +590,8 @@ export default function IncidentDetailPage({
                   <span className="text-amber-400 font-bold">{evidence.length}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-800">
-                  <span className="text-slate-400">Diagnostic Actions:</span>
-                  <span className="text-emerald-400 font-bold">{planner?.total_actions || 0}</span>
+                  <span className="text-slate-400">Remediation Actions:</span>
+                  <span className="text-rose-400 font-bold">{remediationActions.length} Formulated</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-800">
                   <span className="text-slate-400">Autonomous Agents:</span>
@@ -1136,6 +1251,378 @@ export default function IncidentDetailPage({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 7: Self-Healing & Remediation (Phase 4) */}
+      {activeTab === "remediation" && (
+        <div className="space-y-6">
+          {/* Remediation Safety Status Banner */}
+          <div className="p-5 rounded-2xl border border-slate-800 bg-[#0e1424] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-3">
+                <BrainCircuit className="w-5 h-5 text-rose-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-white font-mono">
+                    Autonomous Self-Healing &amp; Remediation Center
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Evidence-grounded action recommendations. No action executes without safety validation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 text-xs font-mono">
+                <span className="text-slate-400">Safety Policy:</span>
+                <span className="px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+                  {remediationPolicy?.mode || "RECOMMENDATION_ONLY"}
+                </span>
+                <button
+                  onClick={handleGenerateRecommendations}
+                  disabled={actionOperating}
+                  className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors disabled:opacity-50"
+                >
+                  {remediationActions.length === 0 ? "Formulate Actions" : "Re-Formulate Actions"}
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+              <Info className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                <strong>Zero-Hallucination Policy:</strong> A recommendation is never treated as proof that the root cause is correct. Execution is restricted to pre-validated registry actions in the isolated simulation sandbox.
+              </span>
+            </div>
+          </div>
+
+          {/* Remediation Actions List */}
+          {remediationActions.length === 0 ? (
+            <div className="p-12 text-center text-xs font-mono text-slate-400 border border-slate-800 rounded-xl bg-[#0e1424] space-y-3">
+              <BrainCircuit className="w-10 h-10 text-rose-400 mx-auto opacity-70" />
+              <p className="font-bold text-slate-200">No Remediation Actions Formulated Yet</p>
+              <p className="max-w-md mx-auto text-slate-400">
+                Click below to synthesize evidence-backed recovery recommendations for this incident.
+              </p>
+              <button
+                onClick={handleGenerateRecommendations}
+                disabled={actionOperating}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold"
+              >
+                {actionOperating ? "Synthesizing Actions..." : "Synthesize Remediation Actions"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {remediationActions.map((act, idx) => {
+                const contraList = (() => {
+                  try {
+                    return JSON.parse(act.contraindications || "[]");
+                  } catch {
+                    return [];
+                  }
+                })();
+
+                return (
+                  <div
+                    key={act.id}
+                    className="p-6 rounded-2xl border border-slate-800 bg-[#0e1424] shadow-sm space-y-5"
+                  >
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-mono font-bold text-slate-400">
+                            Rank #{idx + 1} &bull; <code className="text-indigo-400">{act.action_id}</code>
+                          </span>
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                              act.risk_level === "LOW"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : act.risk_level === "MEDIUM"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                : "bg-red-500/10 text-red-400 border-red-500/30"
+                            }`}
+                          >
+                            {act.risk_level} RISK
+                          </span>
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                              act.status === "EXECUTED"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : act.status === "APPROVED"
+                                ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                                : act.status === "FAILED"
+                                ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                : "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}
+                          >
+                            STATUS: {act.status}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-bold text-white font-mono">{act.name}</h3>
+                        <div className="text-xs font-mono text-slate-400">
+                          Target Service: <strong className="text-slate-200">{act.target_service_name}</strong> &bull; Timeout: {act.timeout_seconds}s
+                        </div>
+                      </div>
+
+                      {/* Benefit Score Gauge */}
+                      <div className="flex items-center space-x-3 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                        <div className="text-right">
+                          <div className="text-[10px] font-mono text-slate-400">Expected Benefit</div>
+                          <div className="text-base font-mono font-extrabold text-rose-300">
+                            {Math.round(act.expected_benefit * 100)}%
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 rounded-full border-2 border-rose-500/30 flex items-center justify-center font-mono text-xs font-bold text-rose-300">
+                          {Math.round(act.expected_benefit * 100)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recommendation Reason (Evidence Grounded) */}
+                    <div className="p-3 rounded-lg border border-indigo-500/20 bg-indigo-950/10 space-y-1 text-xs">
+                      <div className="font-mono font-bold text-indigo-300 flex items-center gap-1.5 text-[11px]">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Why This Action Is Recommended (Empirical Telemetry Grounding):</span>
+                      </div>
+                      <p className="text-slate-300 font-sans leading-relaxed">
+                        {act.recommendation_reason}
+                      </p>
+                    </div>
+
+                    {/* Contraindications Callout */}
+                    {contraList.length > 0 && (
+                      <div className="p-3 rounded-lg border border-red-500/20 bg-red-950/10 space-y-1.5 text-xs">
+                        <div className="font-mono font-bold text-red-400 flex items-center gap-1.5 text-[11px]">
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Contraindications (Actions that MUST NOT be attempted for this incident):</span>
+                        </div>
+                        <ul className="list-disc pl-5 text-slate-300 space-y-1 font-sans text-xs">
+                          {contraList.map((c: string, i: number) => (
+                            <li key={i}>{c}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Verification Result Pill (If Executed) */}
+                    {act.verification_status !== "PENDING" && (
+                      <div
+                        className={`p-3.5 rounded-lg border flex items-center justify-between text-xs font-mono ${
+                          act.verification_status === "VERIFIED"
+                            ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-300"
+                            : act.verification_status === "PARTIALLY_VERIFIED"
+                            ? "bg-amber-950/20 border-amber-500/40 text-amber-300"
+                            : "bg-red-950/20 border-red-500/40 text-red-300"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          {act.verification_status === "VERIFIED" ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          )}
+                          <div>
+                            <span className="font-bold">Recovery Verification: {act.verification_status}</span>
+                            <span className="text-[11px] block opacity-80">
+                              Duration: {act.execution_duration_ms || 0}ms &bull; Rollback Status: {act.rollback_status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => setVerificationModalAction(act)}
+                          className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-white text-[11px] hover:bg-slate-800"
+                        >
+                          View Delta Telemetry
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Action Controls & Approval Workflow */}
+                    <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs font-mono">
+                      <div className="text-slate-400">
+                        {act.approval_status === "APPROVED" ? (
+                          <span className="text-emerald-400 flex items-center gap-1">
+                            <UserCheck className="w-3.5 h-3.5" />
+                            <span>Approved by {act.approved_by}</span>
+                          </span>
+                        ) : act.approval_status === "REJECTED" ? (
+                          <span className="text-red-400">Rejected by operator</span>
+                        ) : (
+                          <span>Approval Status: <strong>{act.approval_status}</strong></span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {act.status === "PROPOSED" && (
+                          <>
+                            <button
+                              onClick={() => setApprovalModalAction(act)}
+                              disabled={actionOperating}
+                              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all"
+                            >
+                              Approve Action
+                            </button>
+                            <button
+                              onClick={() => handleRejectAction(act)}
+                              disabled={actionOperating}
+                              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all border border-slate-700"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+
+                        {act.status === "APPROVED" && (
+                          <button
+                            onClick={() => handleExecuteAction(act)}
+                            disabled={actionOperating}
+                            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40 transition-all"
+                          >
+                            <Play className="w-3 h-3 fill-white" />
+                            <span>Execute in Simulation</span>
+                          </button>
+                        )}
+
+                        {act.status === "EXECUTED" && act.rollback_status === "AVAILABLE" && (
+                          <button
+                            onClick={() => handleRollbackAction(act)}
+                            disabled={actionOperating}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-600/80 hover:bg-amber-600 text-white font-bold transition-all"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Rollback Action</span>
+                          </button>
+                        )}
+
+                        {act.status === "FAILED" && (
+                          <span className="text-red-400 text-[11px] font-bold">
+                            {act.rollback_status === "ROLLED_BACK" ? "ROLLED BACK SAFELY" : "EXECUTION FAILED"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Approval Modal */}
+          {approvalModalAction && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0c1220] p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2 text-sm font-mono font-bold text-white">
+                    <UserCheck className="w-4 h-4 text-indigo-400" />
+                    <span>Human Approval Gate &bull; {approvalModalAction.action_id}</span>
+                  </div>
+                  <button
+                    onClick={() => setApprovalModalAction(null)}
+                    className="text-xs font-mono text-slate-400 hover:text-white"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs font-mono">
+                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                    <div className="text-white font-bold">{approvalModalAction.name}</div>
+                    <div className="text-slate-400">Target: {approvalModalAction.target_service_name} &bull; Risk: {approvalModalAction.risk_level}</div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-slate-400">Operator Sign-off Identity:</label>
+                    <input
+                      type="text"
+                      value={approvalOperatorName}
+                      onChange={(e) => setApprovalOperatorName(e.target.value)}
+                      className="w-full bg-[#080d1a] border border-slate-800 rounded p-2 text-slate-200 text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-slate-400">Justification / Safety Comments:</label>
+                    <textarea
+                      value={approvalComment}
+                      onChange={(e) => setApprovalComment(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Verified target service telemetry. Safe to restart in local simulation."
+                      className="w-full bg-[#080d1a] border border-slate-800 rounded p-2 text-slate-200 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                  <button
+                    onClick={() => setApprovalModalAction(null)}
+                    className="px-3 py-1.5 rounded bg-slate-800 text-slate-300 text-xs font-mono"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleApproveAction}
+                    disabled={actionOperating || !approvalOperatorName}
+                    className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold"
+                  >
+                    Confirm Approval
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Verification Report Delta Inspector Modal */}
+          {verificationModalAction && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-[#0c1220] p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2 text-sm font-mono font-bold text-white">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Recovery Verification Report &bull; {verificationModalAction.action_id}</span>
+                  </div>
+                  <button
+                    onClick={() => setVerificationModalAction(null)}
+                    className="text-xs font-mono text-slate-400 hover:text-white"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-auto space-y-4 font-mono text-xs text-slate-300">
+                  <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 space-y-1">
+                    <div className="font-bold text-emerald-400">
+                      EMPIRICAL OUTCOME: {verificationModalAction.verification_status}
+                    </div>
+                    <p className="text-[11px] text-slate-300 font-sans">
+                      Independent verification evaluated fresh telemetry snapshots after execution.
+                    </p>
+                  </div>
+
+                  {verificationModalAction.verification_details && (
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold uppercase text-slate-400">Detailed Telemetry Delta:</span>
+                      <pre className="p-4 rounded-xl bg-[#060a12] border border-slate-900 text-emerald-300 overflow-x-auto text-xs">
+                        <code>
+                          {JSON.stringify(JSON.parse(verificationModalAction.verification_details), null, 2)}
+                        </code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {verificationModalAction.execution_log && (
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold uppercase text-slate-400">Execution Log:</span>
+                      <pre className="p-3 rounded-lg bg-[#060a12] border border-slate-900 text-slate-400 overflow-x-auto text-xs whitespace-pre-wrap">
+                        <code>{verificationModalAction.execution_log}</code>
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

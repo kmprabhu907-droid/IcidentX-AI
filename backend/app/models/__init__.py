@@ -9,7 +9,7 @@ from backend.app.models.service import Service, ServiceDependency
 from backend.app.models.telemetry import TelemetryEvent
 from backend.app.models.investigation import AgentExecution, Evidence, RootCauseHypothesis, InvestigationPlan
 from backend.app.models.timeline import TimelineEvent
-from backend.app.models.remediation import RemediationAction
+from backend.app.models.remediation import RemediationAction, RemediationPolicy
 from backend.app.models.audit import AuditLog
 
 __all__ = [
@@ -24,5 +24,6 @@ __all__ = [
     "InvestigationPlan",
     "TimelineEvent",
     "RemediationAction",
+    "RemediationPolicy",
     "AuditLog",
 ]
