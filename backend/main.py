@@ -19,6 +19,9 @@ from backend.app.core.exceptions import (
 )
 from backend.app.core.logging import logger, setup_logging
 from backend.app.middleware.request_id import RequestContextMiddleware
+from backend.app.middleware.security_headers import SecurityHeadersMiddleware
+from backend.app.middleware.rate_limit import RateLimitMiddleware
+from backend.app.middleware.payload_limit import PayloadLimitMiddleware
 from backend.app.api.v1.router import api_v1_router
 # Import all models to ensure DeclarativeBase metadata is complete
 import backend.app.models  # noqa: F401
@@ -65,10 +68,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 1. Custom Request Context & Timing Middleware
+# 1. Enterprise Security Headers Middleware (Stage 6.1)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 2. Payload Size Limiter Middleware (Stage 6.1)
+app.add_middleware(PayloadLimitMiddleware)
+
+# 3. Sliding-Window Rate Limiting Middleware (Stage 6.1)
+app.add_middleware(RateLimitMiddleware)
+
+# 4. Custom Request Context & Timing Middleware
 app.add_middleware(RequestContextMiddleware)
 
-# 2. CORS Middleware
+# 5. CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,

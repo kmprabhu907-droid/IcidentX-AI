@@ -15,13 +15,45 @@ class Settings(BaseSettings):
     APP_ENV: str = Field(default="development", description="Runtime environment: development, staging, production")
     APP_DEBUG: bool = Field(default=False, description="Debug mode")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
-    SECRET_KEY: str = Field(default="dev-insecure-secret-key-change-in-production-min32chars!", description="App secret key")
+    SECRET_KEY: str = Field(
+        default="dev-insecure-secret-key-change-in-production-min32chars!",
+        description="App secret key (minimum 32 characters required in production)"
+    )
 
-    # Networking
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str, info):
+        # In production, require strong secrets (min 32 chars and not default dev key)
+        env = info.data.get("APP_ENV", "development")
+        if env == "production":
+            if len(v) < 32 or "dev-insecure" in v:
+                raise ValueError("In production, SECRET_KEY must be at least 32 characters and cannot use default dev secret.")
+        return v
+
+    # Networking & Security
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    ALLOWED_HOSTS: List[str] = ["*"]
+
+    # Enterprise Security Settings (Stage 6.1)
+    ENABLE_SECURITY_HEADERS: bool = True
+    ENABLE_HSTS: bool = False
+    ENABLE_RATE_LIMITING: bool = True
+    RATE_LIMIT_DEFAULT_RPM: int = 120
+    RATE_LIMIT_MUTATION_RPM: int = 30
+    RATE_LIMIT_SIMULATION_RPM: int = 15
+    MAX_REQUEST_BODY_BYTES: int = 2 * 1024 * 1024  # 2 Megabytes
+    CSP_POLICY: str = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' http: https: ws: wss:; "
+        "frame-ancestors 'none';"
+    )
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

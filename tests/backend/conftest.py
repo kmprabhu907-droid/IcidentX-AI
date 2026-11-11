@@ -10,7 +10,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.app.core.database import Base, get_db
+from backend.app.core.config import settings
 from backend.main import app
+
+# Disable rate limiting for high-speed automated unit/integration test suite
+# (Dedicated security test module test_stage_6_1_security.py explicitly enables and tests it)
+settings.ENABLE_RATE_LIMITING = False
 
 # In-memory SQLite for high-speed, isolated test execution
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

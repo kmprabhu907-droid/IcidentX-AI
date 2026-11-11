@@ -6,8 +6,28 @@ Provides standardized, structured JSON-formatted logs for observability and audi
 import sys
 import logging
 import json
+import re
 from datetime import datetime, timezone
 from backend.app.core.config import settings
+
+
+class SensitiveDataFilter(logging.Filter):
+    """
+    Redacts passwords, tokens, API keys, and sensitive authorization strings
+    from log records before emission to standard streams.
+    """
+    PATTERNS = [
+        (re.compile(r'(?i)(bearer\s+[a-zA-Z0-9_\-\.]{15,})'), "Bearer [REDACTED_TOKEN]"),
+        (re.compile(r'(?i)(api[_-]?key["\']?\s*[:=]\s*["\']?)[a-zA-Z0-9_\-]{16,}(["\']?)'), r"\1[REDACTED_API_KEY]\2"),
+        (re.compile(r'(?i)(password["\']?\s*[:=]\s*["\']?)[^"\'\s,}{]{4,}(["\']?)'), r"\1[REDACTED_PASSWORD]\2"),
+        (re.compile(r'(?i)(secret["\']?\s*[:=]\s*["\']?)[^"\'\s,}{]{6,}(["\']?)'), r"\1[REDACTED_SECRET]\2"),
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            for pattern, repl in self.PATTERNS:
+                record.msg = pattern.sub(repl, record.msg)
+        return True
 
 
 class JSONFormatter(logging.Formatter):
@@ -50,6 +70,7 @@ def setup_logging():
         handler.setFormatter(formatter)
 
     root_logger.addHandler(handler)
+    root_logger.addFilter(SensitiveDataFilter())
 
     # Quiet external verbose loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
