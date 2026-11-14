@@ -16,6 +16,8 @@ class PromptSanitizer:
 
     # Secret / credential patterns to redact
     SECRET_PATTERNS = [
+        (re.compile(r'\b(sk-[a-zA-Z0-9_\-]{15,})\b'), "[REDACTED_API_KEY]"),
+        (re.compile(r'\b(AIza[0-9A-Za-z\-_]{30,})\b'), "[REDACTED_API_KEY]"),
         (re.compile(r'(?i)(bearer\s+[a-zA-Z0-9_\-\.]{15,})'), "[REDACTED_BEARER_TOKEN]"),
         (re.compile(r'(?i)(api[_-]?key["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_\-]{16,}["\']?)'), "api_key=[REDACTED_API_KEY]"),
         (re.compile(r'(?i)(password["\']?\s*[:=]\s*["\']?[^"\'\s]{6,}["\']?)'), "password=[REDACTED_PASSWORD]"),
@@ -83,6 +85,13 @@ class PromptSanitizer:
             "threat_count": len(detected),
             "detected_threats": detected,
         }
+
+    @classmethod
+    def sanitize_prompt(cls, text: str, max_length: int = 4000) -> str:
+        """
+        Alias for sanitize_text for prompt sanitization.
+        """
+        return cls.sanitize_text(text, max_length=max_length)
 
     @classmethod
     def sanitize_text(cls, text: str, max_length: int = 4000) -> str:

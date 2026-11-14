@@ -41,11 +41,22 @@ class TimelineReconstructor:
         if not incident:
             return []
 
-        # Check existing timeline events to avoid duplicate insertion
+        # Check existing timeline events to avoid duplicate insertion of reconstructed events
         existing_stmt = select(TimelineEvent).where(TimelineEvent.incident_id == incident_id)
         existing_res = await session.execute(existing_stmt)
         existing = list(existing_res.scalars().all())
-        if existing:
+        has_reconstructed = any(
+            e.event_type not in (
+                "INVESTIGATION_STARTED",
+                "INVESTIGATION_COMPLETED",
+                "LIFECYCLE_TRANSITION",
+                "ALERT_INGESTED",
+                "OWNERSHIP_ASSIGNED",
+                "INCIDENT_CREATED",
+            )
+            for e in existing
+        )
+        if has_reconstructed:
             return existing
 
         timeline_items: List[TimelineEvent] = []

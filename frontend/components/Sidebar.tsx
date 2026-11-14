@@ -17,15 +17,23 @@ import {
   BrainCircuit,
   TestTube,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Bot,
+  Headphones,
+  MessageSquare,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { label: "Hackathon Command Center", href: "/showcase", icon: Sparkles },
+  { label: "Hackathon Showcase (Phase 16)", href: "/showcase", icon: Sparkles },
+  { label: "On-Call Communication", href: "/communication", icon: MessageSquare },
+  { label: "Predictive SRE Intel", href: "/sre-intelligence", icon: Activity },
+  { label: "Recovery & Self-Learning", href: "/learning", icon: RotateCcw },
   { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "AI Intelligence Center", href: "/ai-reasoning", icon: Bot },
   { label: "Reliability Command", href: "/reliability", icon: Activity },
   { label: "Incidents", href: "/incidents", icon: AlertTriangle },
   { label: "Remediation Engine", href: "/remediation", icon: BrainCircuit },
+  { label: "Kubernetes Live", href: "/kubernetes", icon: Server },
   { label: "Telemetry Explorer", href: "/telemetry", icon: Radio },
   { label: "Regression Lab", href: "/regression", icon: RotateCcw },
   { label: "Failure Injection Lab", href: "/simulation", icon: Flame },

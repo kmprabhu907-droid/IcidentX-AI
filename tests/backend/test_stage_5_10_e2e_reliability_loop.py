@@ -156,7 +156,7 @@ async def test_complete_16_step_reliability_loop(db_session: AsyncSession):
     assert agent_result is not None
     assert "decision" in agent_result
     decision = agent_result["decision"]
-    assert decision["action_id"] in ["act-reset-db-pool", "act-apply-rate-limit", "act-restart-service", "act-escalate-human-review"]
+    assert decision["action_id"] in ["act-reset-db-pool", "act-apply-rate-limit", "act-restart-service", "act-escalate-human-review", "act-clear-cache"]
 
     # Step 11: Remediation executed safely
     rem = RemediationAction(

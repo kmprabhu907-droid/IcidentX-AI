@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.telemetry import TelemetryEvent
 from backend.app.services.observability.demo_mesh import demo_mesh
+from backend.app.services.observability.telemetry_anomaly_engine import telemetry_anomaly_engine
 from backend.app.services.investigation.agents.base import BaseInvestigationAgent
 from backend.app.services.investigation.schemas import (
     MetricAnomalyDetail,
@@ -105,6 +106,20 @@ class TelemetryAnalysisAgent(BaseInvestigationAgent):
                     observation=f"{svc_name} connection pool saturated at {db_pool:.1f}%.",
                 ))
                 peak_services.append(svc_name)
+
+        # 3. Incorporate explainable anomalies from TelemetryAnomalyEngine
+        for rec in telemetry_anomaly_engine.list_recent_anomalies(limit=20):
+            if not any(a.service_name == rec.resource_name and a.metric_name == rec.metric_name for a in anomalies):
+                anomalies.append(MetricAnomalyDetail(
+                    service_name=rec.resource_name,
+                    metric_name=rec.metric_name,
+                    current_value=rec.current_value,
+                    baseline_value=rec.baseline_value,
+                    deviation_sigma=rec.deviation_sigma or 3.0,
+                    severity=rec.severity,
+                    observation=rec.explanation,
+                ))
+                peak_services.append(rec.resource_name)
 
         summary = (
             f"Detected {len(anomalies)} metric anomalies across {len(set(peak_services))} services. "

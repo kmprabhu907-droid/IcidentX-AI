@@ -123,6 +123,31 @@ class RootCauseHypothesisAgent(BaseInvestigationAgent):
                     causal_mechanism="Ingress surge -> Resource saturation.",
                 ))
 
+            # Factor in deep container infrastructure diagnostics from KubernetesInvestigatorAgent
+            k8s = state.get("kubernetes", {})
+            if k8s.get("oomkilled_count", 0) > 0 and k8s.get("infrastructure_culprit_service"):
+                k8s_svc = k8s["infrastructure_culprit_service"]
+                hypotheses.append(ProposedHypothesis(
+                    culprit_service=k8s_svc,
+                    title=f"Container Memory Limit Violation (OOMKilled Exit 137) on {k8s_svc}",
+                    hypothesis_text=f"Container in pod '{k8s_svc}' exceeded its cgroup memory limit and was terminated by the Linux kernel OOM killer (exit code 137).",
+                    initial_probability=0.94,
+                    prosecutor_argument=f"Kubernetes Investigator Agent verified container termination with exit code 137 and {k8s.get('oomkilled_count')} OOM event(s).",
+                    defense_argument="Memory spike could be transiently driven by large request payloads rather than a continuous memory leak in application code.",
+                    causal_mechanism="Memory leak / cgroup limit breach -> Kernel OOM killer termination (exit code 137) -> Pod restart -> Request 502/503.",
+                ))
+            elif k8s.get("crashloop_count", 0) > 0 and k8s.get("infrastructure_culprit_service"):
+                k8s_svc = k8s["infrastructure_culprit_service"]
+                hypotheses.append(ProposedHypothesis(
+                    culprit_service=k8s_svc,
+                    title=f"Pod CrashLoopBackOff on {k8s_svc}",
+                    hypothesis_text=f"Workload '{k8s_svc}' is failing liveness/readiness probes or crashing on startup, entering exponential restart backoff.",
+                    initial_probability=0.91,
+                    prosecutor_argument=f"Kubernetes Investigator Agent detected CrashLoopBackOff with repeated restarts on '{k8s_svc}'.",
+                    defense_argument="CrashLoop could be due to an unready external dependency rather than an internal binary defect.",
+                    causal_mechanism="Startup crash / probe failure -> Kubelet CrashLoopBackOff -> Service unavailable.",
+                ))
+
             return HypothesisGenerationResult(
                 competing_hypotheses=hypotheses,
                 generation_rationale=f"Generated {len(hypotheses)} competing hypotheses grounded in topology and telemetry.",

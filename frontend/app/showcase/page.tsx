@@ -27,7 +27,7 @@ import {
   ChevronRight,
   ShieldAlert,
 } from "lucide-react";
-import { api } from "../../services/api";
+import { api, demonstrationApi } from "../../services/api";
 
 export default function ShowcasePage() {
   const [scenarios, setScenarios] = useState<any[]>([]);
@@ -36,8 +36,13 @@ export default function ShowcasePage() {
   const [demoResult, setDemoResult] = useState<any | null>(null);
   const [scorecard, setScorecard] = useState<any | null>(null);
   const [pipelineData, setPipelineData] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<"command_center" | "pipeline" | "courtroom" | "what_if" | "scorecard">("command_center");
+  const [activeTab, setActiveTab] = useState<"command_center" | "pipeline" | "courtroom" | "what_if" | "scorecard" | "orchestration_16">("orchestration_16");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Phase 16 Hackathon Demonstration State
+  const [selectedP16Scenario, setSelectedP16Scenario] = useState<string>("SCENARIO_A");
+  const [p16Execution, setP16Execution] = useState<any | null>(null);
+  const [p16Running, setP16Running] = useState<boolean>(false);
 
   useEffect(() => {
     loadInitialData();
@@ -53,6 +58,28 @@ export default function ShowcasePage() {
       setScorecard(scCard || null);
     } catch (err: any) {
       console.error("Failed to load initial showcase data:", err);
+    }
+  };
+
+  const handleRunP16Orchestration = async () => {
+    setP16Running(true);
+    try {
+      const res = await demonstrationApi.executeScenario(selectedP16Scenario, "DEMOMESH");
+      setP16Execution(res);
+    } catch (err: any) {
+      alert(`Orchestration failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setP16Running(false);
+    }
+  };
+
+  const handleResetP16 = async () => {
+    try {
+      await demonstrationApi.resetScenarios();
+      setP16Execution(null);
+      alert("Demonstration state reset successfully.");
+    } catch (err: any) {
+      alert(`Reset failed: ${err?.message || "Unknown error"}`);
     }
   };
 
@@ -121,8 +148,9 @@ export default function ShowcasePage() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-2 border-b border-zinc-800 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-2">
         {[
+          { id: "orchestration_16", label: "Grand Finale: 16-Step Orchestrator (Phase 16)", icon: Sparkles },
           { id: "command_center", label: "Autonomous Loop", icon: Play },
           { id: "pipeline", label: "11-Agent Architecture", icon: Bot },
           { id: "courtroom", label: "Root Cause Courtroom", icon: Gavel },
@@ -147,6 +175,135 @@ export default function ShowcasePage() {
           );
         })}
       </div>
+
+      {/* Tab: Phase 16 Grand Finale 16-Step Autonomous Orchestrator */}
+      {activeTab === "orchestration_16" && (
+        <div className="space-y-6">
+          {/* Scenario Control Box */}
+          <div className="bg-zinc-900 border border-purple-500/30 rounded-xl p-6 space-y-4 shadow-xl shadow-purple-500/5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  <span>Grand Finale: 16-Step End-to-End Autonomous Orchestrator</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Complete incident lifecycle: Detect &rarr; Investigate &rarr; Root Cause &rarr; Remediate &rarr; Verify &rarr; Learn &rarr; Postmortem across all 15 IncidentX engines.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedP16Scenario}
+                  onChange={(e) => setSelectedP16Scenario(e.target.value)}
+                  disabled={p16Running}
+                  className="bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="SCENARIO_A">Scenario A: Deployment API Latency (payment-service)</option>
+                  <option value="SCENARIO_B">Scenario B: Kubernetes OOMKilled Cascades (order-service)</option>
+                  <option value="SCENARIO_C">Scenario C: Cascading Dependency Deadlock (auth-service)</option>
+                </select>
+
+                <button
+                  onClick={handleRunP16Orchestration}
+                  disabled={p16Running}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-500/20 flex items-center gap-2 transition disabled:opacity-50"
+                >
+                  <Play className={`w-4 h-4 ${p16Running ? "animate-spin" : ""}`} />
+                  <span>{p16Running ? "Orchestrating 16 Steps..." : "Launch 16-Step Autonomous Orchestration"}</span>
+                </button>
+
+                <button
+                  onClick={handleResetP16}
+                  disabled={p16Running}
+                  className="px-4 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold border border-zinc-700 transition"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Execution Result Banner */}
+          {p16Execution && (
+            <div className="bg-zinc-900 border border-emerald-500/30 rounded-xl p-6 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-800 pb-4 gap-3">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      ORCHESTRATION COMPLETED (16/16 STEPS)
+                    </span>
+                    <span className="font-mono text-xs text-zinc-400">Incident: {p16Execution.incident_id}</span>
+                    <span className="font-mono text-xs text-purple-400">Duration: {p16Execution.total_duration_seconds}s</span>
+                  </div>
+                  <h4 className="text-base font-bold text-white mt-1.5">{p16Execution.title}</h4>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {p16Execution.postmortem_id && (
+                    <a
+                      href={`http://localhost:8000/api/v1/incidents/${p16Execution.incident_id}/postmortem/html`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>View Generated Postmortem</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                  <span className="text-zinc-500 text-[10px] uppercase block font-semibold">Autonomous Ruling</span>
+                  <p className="text-emerald-300 font-bold mt-1 truncate">{p16Execution.root_cause_ruling}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                  <span className="text-zinc-500 text-[10px] uppercase block font-semibold">Confidence Score</span>
+                  <p className="text-purple-400 font-bold mt-1">{(p16Execution.confidence_score * 100).toFixed(0)}% (Calibrated)</p>
+                </div>
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                  <span className="text-zinc-500 text-[10px] uppercase block font-semibold">Remediation Executed</span>
+                  <p className="text-cyan-300 font-bold mt-1 truncate">{p16Execution.remediation_executed}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                  <span className="text-zinc-500 text-[10px] uppercase block font-semibold">Recovery Status</span>
+                  <p className="text-emerald-400 font-bold mt-1">{p16Execution.recovery_status}</p>
+                </div>
+              </div>
+
+              {/* 16-Step Stepper Grid */}
+              <div className="space-y-3 pt-2">
+                <h5 className="text-xs font-bold uppercase text-zinc-400 font-mono">16-Step Autonomous Orchestration Flow</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {p16Execution.steps.map((step: any) => (
+                    <div
+                      key={step.step_number}
+                      className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2 hover:border-zinc-700 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-purple-400 font-bold">
+                          Step {step.step_number}
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Done
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-white">{step.name}</div>
+                      <div className="text-[10px] text-zinc-400 line-clamp-2">{step.details}</div>
+                      <div className="text-[10px] text-purple-400/90 font-mono pt-1 border-t border-zinc-900">
+                        {step.phase_ref}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Tab: Command Center */}
       {activeTab === "command_center" && (

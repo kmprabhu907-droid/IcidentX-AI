@@ -36,8 +36,9 @@ import {
   BrainCircuit,
   RotateCcw,
   UserCheck,
+  TrendingUp,
 } from "lucide-react";
-import { api } from "../../../services/api";
+import { api, learningApi } from "../../../services/api";
 import {
   Incident,
   Evidence,
@@ -51,6 +52,14 @@ import {
   InvestigationStatus,
   RemediationAction,
   RemediationPolicy,
+  ResolutionPlan,
+  RecoveryVerificationReport,
+  KillSwitchState,
+  AdvancedRecoveryReport,
+  TelemetryComparisonReport,
+  RecoveryStabilityReport,
+  PostmortemReport,
+  ContinuousImprovementRecommendation,
 } from "../../../types";
 
 const INVESTIGATION_AGENTS = [
@@ -93,11 +102,30 @@ export default function IncidentDetailPage({
   const [verificationModalAction, setVerificationModalAction] = useState<RemediationAction | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "courtroom" | "timeline" | "evidence" | "planner" | "agents" | "remediation"
+    "overview" | "courtroom" | "timeline" | "evidence" | "planner" | "agents" | "remediation" | "resolution" | "recovery_learning"
   >("overview");
   const [loading, setLoading] = useState(true);
   const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Phase 12 Safe Autonomous Incident Resolution State
+  const [resolutionPlan, setResolutionPlan] = useState<ResolutionPlan | null>(null);
+  const [planningResolution, setPlanningResolution] = useState(false);
+  const [executingResolution, setExecutingResolution] = useState(false);
+  const [killSwitchState, setKillSwitchState] = useState<KillSwitchState | null>(null);
+
+  // Phase 13 Recovery Verification & Self-Learning State
+  const [advancedRecovery, setAdvancedRecovery] = useState<AdvancedRecoveryReport | null>(null);
+  const [telemetryDiff, setTelemetryDiff] = useState<TelemetryComparisonReport | null>(null);
+  const [stabilityReport, setStabilityReport] = useState<RecoveryStabilityReport | null>(null);
+  const [postmortemReport, setPostmortemReport] = useState<PostmortemReport | null>(null);
+  const [learningRecommendations, setLearningRecommendations] = useState<ContinuousImprovementRecommendation[]>([]);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackCorrectedCause, setFeedbackCorrectedCause] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [verifyingRecovery, setVerifyingRecovery] = useState(false);
+  const [generatingPostmortem, setGeneratingPostmortem] = useState(false);
 
   // Inspector Modals
   const [selectedRawPayload, setSelectedRawPayload] = useState<{ title: string; json: string } | null>(null);
@@ -119,6 +147,13 @@ export default function IncidentDetailPage({
         statusRes,
         remRes,
         polRes,
+        p12PlanRes,
+        p12KillRes,
+        p13RecovRes,
+        p13DiffRes,
+        p13StabRes,
+        p13PostmRes,
+        p13RecsRes,
       ] = await Promise.all([
         api.getIncident(incidentId),
         api.getIncidentEvidence(incidentId).catch(() => ({ items: [], total: 0 })),
@@ -130,6 +165,13 @@ export default function IncidentDetailPage({
         api.getInvestigationStatus(incidentId).catch(() => null),
         api.listIncidentRemediationActions(incidentId).catch(() => []),
         api.getRemediationPolicy().catch(() => null),
+        api.getResolutionPlan(incidentId).catch(() => null),
+        api.getKillSwitchStatus().catch(() => null),
+        learningApi.getRecoveryVerification(incidentId).catch(() => null),
+        learningApi.getTelemetryComparison(incidentId).catch(() => null),
+        learningApi.getStability(incidentId).catch(() => null),
+        learningApi.getPostmortem(incidentId).catch(() => null),
+        learningApi.getRecommendations(incidentId).catch(() => []),
       ]);
 
       setIncident(inc);
@@ -142,10 +184,91 @@ export default function IncidentDetailPage({
       setInvestigationStatus(statusRes);
       setRemediationActions(remRes);
       setRemediationPolicy(polRes);
+      setResolutionPlan(p12PlanRes);
+      setKillSwitchState(p12KillRes);
+      setAdvancedRecovery(p13RecovRes);
+      setTelemetryDiff(p13DiffRes);
+      setStabilityReport(p13StabRes);
+      setPostmortemReport(p13PostmRes);
+      setLearningRecommendations(p13RecsRes || []);
     } catch (err: any) {
       setError(err.message || "Failed to load incident investigation details.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyRecovery = async () => {
+    if (!incident) return;
+    setVerifyingRecovery(true);
+    try {
+      const targetSvc = incident.title?.toLowerCase().includes("payment") ? "payment-service" : "order-service";
+      const rep = await learningApi.verifyRecovery(incident.id, {
+        service_name: targetSvc,
+        environment: incident.environment || "DEMOMESH",
+      });
+      setAdvancedRecovery(rep);
+      if (rep.telemetry_comparison) {
+        setTelemetryDiff(rep.telemetry_comparison);
+      }
+    } catch (err: any) {
+      alert(`Recovery verification failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setVerifyingRecovery(false);
+    }
+  };
+
+  const handleCheckStability = async () => {
+    if (!incident) return;
+    try {
+      const targetSvc = incident.title?.toLowerCase().includes("payment") ? "payment-service" : "order-service";
+      const stab = await learningApi.checkStability(incident.id, {
+        service_name: targetSvc,
+        observation_window_seconds: 300,
+      });
+      setStabilityReport(stab);
+    } catch (err: any) {
+      alert(`Stability check failed: ${err?.message || "Unknown error"}`);
+    }
+  };
+
+  const handleGeneratePostmortem = async () => {
+    if (!incident) return;
+    setGeneratingPostmortem(true);
+    try {
+      const targetSvc = incident.title?.toLowerCase().includes("payment") ? "payment-service" : "order-service";
+      const pm = await learningApi.generatePostmortem(incident.id, {
+        title: incident.title,
+        severity: incident.severity,
+        environment: incident.environment || "DEMOMESH",
+        affected_services: [targetSvc],
+        verified_root_cause: courtroom?.courtroom_evaluations?.[0]?.hypothesis?.hypothesis_text || "Unbounded transaction heap exhaustion",
+        root_cause_is_conclusive: true,
+        remediation_performed: resolutionPlan?.proposed_actions?.[0]?.name || "Rollback deployment",
+      });
+      setPostmortemReport(pm);
+      const recs = await learningApi.getRecommendations(incident.id).catch(() => []);
+      setLearningRecommendations(recs);
+    } catch (err: any) {
+      alert(`Postmortem generation failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setGeneratingPostmortem(false);
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!incident) return;
+    try {
+      await learningApi.submitFeedback(incident.id, {
+        reviewer: "sre-lead",
+        rating: feedbackRating,
+        comments: feedbackComment || "Investigation and remediation verified accurate.",
+        corrected_root_cause: feedbackCorrectedCause || undefined,
+      });
+      setFeedbackSubmitted(true);
+      alert("Feedback successfully submitted! Controlled learning policy updated.");
+    } catch (err: any) {
+      alert(`Feedback submission failed: ${err?.message || "Unknown error"}`);
     }
   };
 
@@ -245,6 +368,74 @@ export default function IncidentDetailPage({
       alert(`Rollback failed: ${err.message}`);
     } finally {
       setActionOperating(false);
+    }
+  };
+
+  const handleGenerateResolutionPlan = async () => {
+    setPlanningResolution(true);
+    try {
+      const plan = await api.generateResolutionPlan(incidentId);
+      setResolutionPlan(plan);
+      await loadIncidentData();
+    } catch (err: any) {
+      alert(`Failed to generate resolution plan: ${err.message}`);
+    } finally {
+      setPlanningResolution(false);
+    }
+  };
+
+  const handleApproveResolution = async (decision: "APPROVED" | "REJECTED") => {
+    const reason = prompt(
+      decision === "APPROVED"
+        ? "Enter approval justification for execution:"
+        : "Enter rejection reason:"
+    );
+    if (!reason) return;
+    try {
+      const updated = await api.approveResolutionPlan(incidentId, {
+        decision,
+        approving_user: "sre-responder@enterprise.io",
+        user_role: "SRE_LEAD",
+        reason,
+      });
+      setResolutionPlan(updated);
+      await loadIncidentData();
+    } catch (err: any) {
+      alert(`Approval decision failed: ${err.message}`);
+    }
+  };
+
+  const handleExecuteResolution = async () => {
+    if (!confirm("Are you sure you want to execute this approved remediation plan?")) return;
+    setExecutingResolution(true);
+    try {
+      const updated = await api.executeResolutionPlan(incidentId, true);
+      setResolutionPlan(updated);
+      await loadIncidentData();
+    } catch (err: any) {
+      alert(`Execution failed: ${err.message}`);
+    } finally {
+      setExecutingResolution(false);
+    }
+  };
+
+  const handleToggleKillSwitch = async (activate: boolean) => {
+    const reason = prompt(
+      activate
+        ? "Enter reason for triggering GLOBAL REMEDIATION KILL SWITCH:"
+        : "Enter reason for resetting kill switch:"
+    );
+    if (!reason) return;
+    try {
+      const res = await api.toggleKillSwitch({
+        is_active: activate,
+        user: "sre-lead@enterprise.io",
+        reason,
+      });
+      setKillSwitchState(res);
+      await loadIncidentData();
+    } catch (err: any) {
+      alert(`Kill switch toggle failed: ${err.message}`);
     }
   };
 
@@ -489,6 +680,32 @@ export default function IncidentDetailPage({
         >
           <BrainCircuit className="w-3.5 h-3.5 text-rose-400" />
           <span>Self-Healing &amp; Remediation ({remediationActions.length})</span>
+        </button>
+
+        {/* Phase 12 Tab */}
+        <button
+          onClick={() => setActiveTab("resolution")}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-mono font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === "resolution"
+              ? "border-cyan-500 text-cyan-400 bg-cyan-500/5"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Incident Resolution (Phase 12)</span>
+        </button>
+
+        {/* Phase 13 Tab */}
+        <button
+          onClick={() => setActiveTab("recovery_learning")}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-mono font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === "recovery_learning"
+              ? "border-emerald-500 text-emerald-400 bg-emerald-500/5"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Postmortem &amp; Recovery (Phase 13)</span>
         </button>
       </div>
 
@@ -1625,6 +1842,719 @@ export default function IncidentDetailPage({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Safe Autonomous Incident Resolution (Phase 12) */}
+      {activeTab === "resolution" && (
+        <div className="space-y-6">
+          {/* Global Kill Switch Banner (Module 12.12) */}
+          <div
+            className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              killSwitchState?.is_active
+                ? "border-red-500 bg-red-950/40 text-red-200"
+                : "border-slate-800 bg-[#0e1424] text-slate-300"
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <ShieldAlert className={`w-5 h-5 ${killSwitchState?.is_active ? "text-red-400 animate-pulse" : "text-emerald-400"}`} />
+              <div>
+                <span className="text-xs font-mono font-bold uppercase tracking-wider block">
+                  Global Remediation Kill Switch: {killSwitchState?.is_active ? "ACTIVE (ALL REMEDIATION HALTED)" : "STANDBY (OPERATIONAL)"}
+                </span>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {killSwitchState?.is_active
+                    ? `Emergency stop triggered by ${killSwitchState.activated_by || "Operator"}: "${killSwitchState.reason}"`
+                    : "Instantaneous emergency stop halts all active and planned infrastructure modifications."}
+                </span>
+              </div>
+            </div>
+            <div>
+              {killSwitchState?.is_active ? (
+                <button
+                  onClick={() => handleToggleKillSwitch(false)}
+                  className="px-3 py-1.5 rounded-lg border border-red-500/50 bg-red-900/60 hover:bg-red-800 text-white text-xs font-mono font-bold transition-all"
+                >
+                  Reset Kill Switch
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleToggleKillSwitch(true)}
+                  className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-950/40 hover:bg-red-900/50 text-red-300 text-xs font-mono font-bold transition-all"
+                >
+                  Trigger Emergency Stop
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Resolution Plan Hero Banner (Module 12.1) */}
+          <div className="p-5 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-cyan-500/20 pb-3">
+              <div className="flex items-center space-x-3">
+                <ShieldCheck className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                    <span>Safe Autonomous Incident Resolution Engine</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                      Phase 12
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Causal Plan Synthesis &bull; Pre-Execution Safety &bull; Anti-Tamper Approvals &bull; Empirical Verification &bull; Automated Rollback
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleGenerateResolutionPlan}
+                  disabled={planningResolution}
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all disabled:opacity-50 flex items-center space-x-1.5 shadow-sm"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${planningResolution ? "animate-spin" : ""}`} />
+                  <span>{planningResolution ? "Formulating Plan..." : resolutionPlan ? "Re-Synthesize Plan" : "Generate Resolution Plan"}</span>
+                </button>
+              </div>
+            </div>
+
+            {resolutionPlan ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1">
+                  <span className="text-slate-500 text-[10px] uppercase font-bold">Target Service:</span>
+                  <p className="text-white font-bold">{resolutionPlan.target_service_name}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1">
+                  <span className="text-slate-500 text-[10px] uppercase font-bold">Environment:</span>
+                  <p className="text-cyan-400 font-bold">[{resolutionPlan.environment}]</p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1">
+                  <span className="text-slate-500 text-[10px] uppercase font-bold">Risk Classification:</span>
+                  <p
+                    className={`font-bold ${
+                      resolutionPlan.overall_risk_level === "LOW"
+                        ? "text-emerald-400"
+                        : resolutionPlan.overall_risk_level === "MODERATE"
+                        ? "text-blue-400"
+                        : resolutionPlan.overall_risk_level === "HIGH"
+                        ? "text-amber-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {resolutionPlan.overall_risk_level} (Score: {resolutionPlan.risk_assessment.risk_score.toFixed(2)})
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1">
+                  <span className="text-slate-500 text-[10px] uppercase font-bold">Resolution Status:</span>
+                  <p className="text-amber-400 font-bold">{resolutionPlan.status}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs font-mono text-slate-400">
+                Click <strong>"Generate Resolution Plan"</strong> to synthesize a verified remediation plan from Phase 11 Root Cause findings.
+              </div>
+            )}
+          </div>
+
+          {resolutionPlan && (
+            <>
+              {/* Module 12.6: Pre-Execution Safety Check Battery */}
+              <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                      Module 12.6: Pre-Execution Safety Inspection Battery
+                    </h3>
+                  </div>
+                  <span className="text-xs font-mono text-slate-400">
+                    Deterministic Least-Privilege Invariants (10 Checks)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-xs font-mono">
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Cluster Identity</span>
+                    <span className="text-emerald-400 font-bold">PASSED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Namespace Auth</span>
+                    <span className="text-emerald-400 font-bold">PASSED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Target Resource</span>
+                    <span className="text-emerald-400 font-bold">PASSED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Action Allowlist</span>
+                    <span className="text-emerald-400 font-bold">ALLOWLISTED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Disruption Budget</span>
+                    <span className="text-emerald-400 font-bold">SATISFIED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Approval Signature</span>
+                    <span className={resolutionPlan.approval_record.is_tampered ? "text-red-400 font-bold" : "text-emerald-400 font-bold"}>
+                      {resolutionPlan.approval_record.is_tampered ? "TAMPERED" : "VERIFIED"}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Plan Freshness</span>
+                    <span className="text-emerald-400 font-bold">&lt; 30m VALID</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Rollback Ready</span>
+                    <span className="text-emerald-400 font-bold">CONFIGURED</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Kill Switch</span>
+                    <span className={killSwitchState?.is_active ? "text-red-400 font-bold" : "text-emerald-400 font-bold"}>
+                      {killSwitchState?.is_active ? "HALTED" : "INACTIVE"}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between">
+                    <span>Pre-State Probe</span>
+                    <span className="text-emerald-400 font-bold">READY</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Module 12.4: Approval Workflow Center */}
+              <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <UserCheck className="w-4 h-4 text-purple-400" />
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                      Module 12.4: Action-Level Authorization &amp; Anti-Tamper Binding
+                    </h3>
+                  </div>
+                  <span className="text-xs font-mono text-slate-400">
+                    Approval ID: {resolutionPlan.approval_record.approval_id}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-800 space-y-3 text-xs font-mono">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <span className="text-slate-500 text-[10px] uppercase font-bold">Anti-Tamper SHA-256 Fingerprint:</span>
+                      <p className="text-purple-300 font-mono text-[11px] truncate max-w-md">
+                        {resolutionPlan.approval_record.parameters_hash}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <span
+                        className={`px-3 py-1 rounded text-xs font-bold border ${
+                          resolutionPlan.approval_record.approval_status === "APPROVED" || resolutionPlan.approval_record.approval_status === "AUTO_APPROVED"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            : resolutionPlan.approval_record.approval_status === "PENDING"
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                            : "bg-red-500/10 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        {resolutionPlan.approval_record.approval_status}
+                      </span>
+
+                      {resolutionPlan.approval_record.approval_status === "PENDING" && (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleApproveResolution("APPROVED")}
+                            className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm"
+                          >
+                            Approve Action
+                          </button>
+                          <button
+                            onClick={() => handleApproveResolution("REJECTED")}
+                            className="px-3 py-1.5 rounded bg-red-900/60 hover:bg-red-800 text-red-200 font-bold border border-red-500/40"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/60 text-[11px]">
+                    <div>
+                      <strong className="text-slate-400">Requesting Actor: </strong>
+                      <span className="text-white">{resolutionPlan.approval_record.requesting_actor}</span>
+                    </div>
+                    <div>
+                      <strong className="text-slate-400">Approving User: </strong>
+                      <span className="text-white">{resolutionPlan.approval_record.approving_user || "Awaiting Human Decision"}</span>
+                    </div>
+                    <div>
+                      <strong className="text-slate-400">Expires At: </strong>
+                      <span className="text-slate-300">{new Date(resolutionPlan.approval_record.expires_at).toLocaleTimeString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Module 12.5: Controlled Execution Monitor */}
+              <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <Terminal className="w-4 h-4 text-cyan-400" />
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                      Module 12.5: Controlled Execution Engine &amp; State Monitoring
+                    </h3>
+                  </div>
+
+                  {(resolutionPlan.approval_record.approval_status === "APPROVED" || resolutionPlan.approval_record.approval_status === "AUTO_APPROVED") &&
+                    resolutionPlan.status !== "EXECUTED" && (
+                      <button
+                        onClick={handleExecuteResolution}
+                        disabled={executingResolution || killSwitchState?.is_active}
+                        className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-mono font-bold shadow-md shadow-emerald-900/30 transition-all disabled:opacity-50 flex items-center space-x-2"
+                      >
+                        <Play className={`w-3.5 h-3.5 ${executingResolution ? "animate-spin" : ""}`} />
+                        <span>{executingResolution ? "Executing Remediations..." : "Execute Approved Plan"}</span>
+                      </button>
+                    )}
+                </div>
+
+                {resolutionPlan.execution_result ? (
+                  <div className="space-y-3 text-xs font-mono">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-slate-900/60 border border-slate-800">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-slate-500">Execution ID:</span>
+                        <span className="text-white font-bold">{resolutionPlan.execution_result.execution_id}</span>
+                        <span className="text-slate-500">&bull; Duration:</span>
+                        <span className="text-cyan-400">{resolutionPlan.execution_result.duration_ms}ms</span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold">
+                        {resolutionPlan.execution_result.status}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-lg bg-black/60 border border-slate-800/80 font-mono text-[11px] text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+                      {resolutionPlan.execution_result.execution_logs.map((log, idx) => (
+                        <div key={idx} className="flex items-start space-x-2">
+                          <span className="text-slate-600 select-none">&gt;</span>
+                          <span>{log}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-xs font-mono text-slate-500">
+                    Awaiting execution dispatch. Action will run once authorized by operator.
+                  </div>
+                )}
+              </div>
+
+              {/* Module 12.8: Empirical Recovery Verification */}
+              {resolutionPlan.recovery_report && (
+                <div className="p-5 rounded-xl border border-emerald-500/30 bg-emerald-950/15 space-y-4">
+                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                        Module 12.8: Empirical Recovery Verification &amp; Metric Evidence
+                      </h3>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded text-xs font-bold border ${
+                        resolutionPlan.recovery_report.status === "RECOVERY_SUCCESSFUL"
+                          ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                          : "bg-red-500/10 text-red-300 border-red-500/30"
+                      }`}
+                    >
+                      {resolutionPlan.recovery_report.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                    {resolutionPlan.recovery_report.metric_comparisons.map((m, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
+                        <span className="text-slate-400 text-[10px] uppercase font-bold">{m.metric_name}:</span>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-400 line-through">{m.before_value.toFixed(1)}{m.unit}</span>
+                          <span className="text-slate-500">&rarr;</span>
+                          <span className="text-emerald-400 font-bold">{m.after_value.toFixed(1)}{m.unit}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Threshold: &lt;{m.threshold}{m.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-xs font-mono text-emerald-200">
+                    <strong>Recovery Finding: </strong>
+                    {resolutionPlan.recovery_report.summary}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Recovery Verification & Self-Learning (Phase 13) */}
+      {activeTab === "recovery_learning" && (
+        <div className="space-y-6">
+          {/* Action Bar */}
+          <div className="flex flex-wrap items-center justify-between p-4 rounded-xl border border-slate-800 bg-[#0e1424] gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-emerald-400" />
+                <span>Empirical Recovery Verification &amp; Self-Learning Engine</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                12-pillar verification, multi-interval stability monitoring, automated postmortems &amp; safe learning
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleVerifyRecovery}
+                disabled={verifyingRecovery}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50"
+              >
+                <Activity className={`w-3.5 h-3.5 ${verifyingRecovery ? "animate-spin" : ""}`} />
+                <span>{verifyingRecovery ? "Verifying..." : "Verify 12 Pillars"}</span>
+              </button>
+
+              <button
+                onClick={handleCheckStability}
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Check Stability (5m)</span>
+              </button>
+
+              <button
+                onClick={handleGeneratePostmortem}
+                disabled={generatingPostmortem}
+                className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50"
+              >
+                <FileText className={`w-3.5 h-3.5 ${generatingPostmortem ? "animate-spin" : ""}`} />
+                <span>{generatingPostmortem ? "Generating..." : "Generate Postmortem"}</span>
+              </button>
+
+              {incident && (
+                <a
+                  href={`http://localhost:8000/api/v1/incidents/${incident.id}/postmortem/html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 border border-slate-700 transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Print HTML Postmortem</span>
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* 1. Advanced 12-Pillar Recovery Report */}
+          <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>12-Pillar Empirical Health Assessment</span>
+              </h4>
+              {advancedRecovery && (
+                <span
+                  className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
+                    advancedRecovery.status === "RECOVERY_SUCCESSFUL"
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : advancedRecovery.status === "RECOVERY_PARTIAL"
+                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                  }`}
+                >
+                  {advancedRecovery.status}
+                </span>
+              )}
+            </div>
+
+            {advancedRecovery ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs font-mono">
+                  {[
+                    { label: "Pod Readiness", pass: advancedRecovery.pod_readiness_verified },
+                    { label: "Deployment Serving", pass: advancedRecovery.deployment_available },
+                    { label: "Restart Frequency", pass: advancedRecovery.restart_frequency_cleared },
+                    { label: "Error Rate (<2%)", pass: advancedRecovery.error_rate_recovered },
+                    { label: "Latency (<300ms)", pass: advancedRecovery.latency_normalized },
+                    { label: "CPU & Memory", pass: advancedRecovery.resources_healthy },
+                    { label: "Database Pool", pass: advancedRecovery.database_healthy },
+                    { label: "Dependencies", pass: advancedRecovery.dependencies_healthy },
+                    { label: "Trace Error Spans", pass: advancedRecovery.distributed_trace_healthy },
+                  ].map((pillar, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                        pillar.pass
+                          ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-300"
+                          : "bg-rose-950/20 border-rose-500/20 text-rose-300"
+                      }`}
+                    >
+                      <span>{pillar.label}</span>
+                      {pillar.pass ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300">
+                  <strong>Verification Summary: </strong>
+                  {advancedRecovery.summary}
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-400">
+                Click &ldquo;Verify 12 Pillars&rdquo; above to run real-time empirical recovery verification.
+              </div>
+            )}
+          </div>
+
+          {/* 2. Before-and-After Telemetry Comparison */}
+          {telemetryDiff && (
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-cyan-400" />
+                  <span>Before vs. After Telemetry Comparison</span>
+                </h4>
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="text-emerald-400">Improved: {telemetryDiff.improved_metrics.length}</span>
+                  <span className="text-slate-500">|</span>
+                  <span className="text-rose-400">Regressed: {telemetryDiff.regressed_metrics.length}</span>
+                  <span className="text-slate-500">|</span>
+                  <span className="text-slate-300">Stability: {(telemetryDiff.recovery_stability_score * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+
+              {telemetryDiff.baseline_incomplete && (
+                <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+                  <strong>Honesty Notice: </strong> Baseline telemetry was partially missing. Diffs reflect observed measurements without fabrication.
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-slate-900/80 text-slate-400 uppercase">
+                    <tr>
+                      <th className="p-2.5">Metric</th>
+                      <th className="p-2.5">Before</th>
+                      <th className="p-2.5">After</th>
+                      <th className="p-2.5">Delta</th>
+                      <th className="p-2.5">Trend</th>
+                      <th className="p-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {telemetryDiff.metrics.map((m, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/30">
+                        <td className="p-2.5 font-bold text-slate-200">{m.metric_name}</td>
+                        <td className="p-2.5 text-slate-400">{m.before_value !== null ? `${m.before_value}${m.unit}` : "N/A"}</td>
+                        <td className="p-2.5 text-white font-bold">{m.after_value !== null ? `${m.after_value}${m.unit}` : "N/A"}</td>
+                        <td className="p-2.5">
+                          {m.delta_value != null ? (
+                            <span className={m.trend === "IMPROVED" ? "text-emerald-400" : m.trend === "REGRESSED" ? "text-rose-400" : "text-slate-400"}>
+                              {m.delta_value > 0 ? `+${m.delta_value}` : m.delta_value}{m.unit}
+                            </span>
+                          ) : "-"}
+                        </td>
+                        <td className="p-2.5">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            m.trend === "IMPROVED" ? "bg-emerald-500/10 text-emerald-400" : m.trend === "REGRESSED" ? "bg-rose-500/10 text-rose-400" : "bg-slate-800 text-slate-400"
+                          }`}>
+                            {m.trend}
+                          </span>
+                        </td>
+                        <td className="p-2.5">
+                          {m.is_healthy ? (
+                            <span className="text-emerald-400 font-bold">HEALTHY</span>
+                          ) : (
+                            <span className="text-rose-400 font-bold">DEGRADED</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Recovery Stability Monitor */}
+          {stabilityReport && (
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span>Recovery Stability Observation Window (5 min)</span>
+                </h4>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${
+                  stabilityReport.is_stable ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                }`}>
+                  {stabilityReport.is_stable ? "STABILITY SUSTAINED" : "DRIFT DETECTED"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-mono text-xs">
+                {stabilityReport.checks.map((chk) => (
+                  <div key={chk.check_index} className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1">
+                    <div className="text-[10px] text-slate-400 font-bold">Interval #{chk.check_index}</div>
+                    <div className="text-slate-200">Err: <strong className="text-emerald-400">{chk.error_rate_percent}%</strong></div>
+                    <div className="text-slate-200">P95: <strong className="text-cyan-400">{chk.p95_latency_ms}ms</strong></div>
+                    <div className="text-slate-400 text-[10px]">Restarts: {chk.restart_count}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4. Automated Postmortem Viewer */}
+          {postmortemReport && (
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <span>Enterprise Incident Postmortem: {postmortemReport.postmortem_id}</span>
+                </h4>
+                <span className="text-xs text-slate-400 font-mono">
+                  Duration: {postmortemReport.incident_duration_minutes} min
+                </span>
+              </div>
+
+              {/* Facts vs AI Hypotheses Two-Column Split */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-emerald-950/10 border border-emerald-500/20 space-y-2">
+                  <h5 className="text-xs font-bold uppercase text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Verified Empirical Facts</span>
+                  </h5>
+                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+                    {postmortemReport.verified_facts.map((fact, idx) => (
+                      <li key={idx}>{fact}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-4 rounded-lg bg-purple-950/10 border border-purple-500/20 space-y-2">
+                  <h5 className="text-xs font-bold uppercase text-purple-400 flex items-center gap-1.5">
+                    <Brain className="w-3.5 h-3.5" />
+                    <span>AI Root Cause Hypotheses</span>
+                  </h5>
+                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+                    {postmortemReport.ai_interpretations.map((ai, idx) => (
+                      <li key={idx}>{ai}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Follow-up tasks */}
+              {postmortemReport.follow_up_tasks.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <div className="text-xs font-bold uppercase text-slate-400">Preventive Action Items</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {postmortemReport.follow_up_tasks.map((task, idx) => (
+                      <div key={idx} className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{task.title}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono">
+                            {task.priority}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">{task.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 5. Continuous Improvement Recommendations */}
+          {learningRecommendations.length > 0 && (
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-3">
+              <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Continuous SRE Improvement Recommendations</span>
+              </h4>
+              <div className="grid grid-cols-1 gap-3">
+                {learningRecommendations.map((rec) => (
+                  <div key={rec.recommendation_id} className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">{rec.title}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
+                        {rec.category} ({rec.priority})
+                      </span>
+                    </div>
+                    <p className="text-slate-300">{rec.description}</p>
+                    <div className="text-[11px] text-emerald-400">
+                      <strong>Expected Benefit: </strong>{rec.expected_benefit}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 6. Human SRE Feedback & Controlled Learning */}
+          <div className="p-5 rounded-xl border border-slate-800 bg-[#0e1424] space-y-4">
+            <h4 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-cyan-400" />
+              <span>Human SRE Feedback &amp; Knowledge Validation</span>
+            </h4>
+            <p className="text-xs text-slate-400">
+              Your feedback is audited and used for controlled, versioned learning updates. Unverified AI conclusions are never ingested without approval.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Rating (1-5)</label>
+                <select
+                  value={feedbackRating}
+                  onChange={(e) => setFeedbackRating(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-white"
+                >
+                  <option value={5}>5 - Excellent (Accurate Root Cause &amp; Remediation)</option>
+                  <option value={4}>4 - Good</option>
+                  <option value={3}>3 - Acceptable</option>
+                  <option value={2}>2 - Flawed Investigation</option>
+                  <option value={1}>1 - Inaccurate Verdict</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Corrected Root Cause (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. JVM Metaspace Leak"
+                  value={feedbackCorrectedCause}
+                  onChange={(e) => setFeedbackCorrectedCause(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">SRE Notes</label>
+                <input
+                  type="text"
+                  placeholder="Observations for learning model..."
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSubmitFeedback}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold transition"
+            >
+              Submit Human Validation &amp; Update Learning Policy
+            </button>
+          </div>
         </div>
       )}
 

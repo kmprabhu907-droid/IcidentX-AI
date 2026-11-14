@@ -25,7 +25,14 @@ import {
   XCircle,
   Sparkles,
   HelpCircle,
-  Database
+  Database,
+  Server,
+  Cpu,
+  Network,
+  GitBranch,
+  ArrowUpRight,
+  Sliders,
+  Filter
 } from "lucide-react";
 import { api } from "../../services/api";
 import { 
@@ -35,17 +42,37 @@ import {
   AnomalyAlert, 
   AnomalyRecordItem, 
   MetricBaselineItem, 
-  DetectionStatus 
+  DetectionStatus,
+  ObservabilityStackStatus,
+  PromQLTemplate,
+  PrometheusQueryResult,
+  OpenTelemetryTrace,
+  UnifiedTelemetryTimelineItem,
+  GrafanaDashboardInfo
 } from "../../types";
 
 export default function TelemetryPage() {
-  const [activeTab, setActiveTab] = useState<"metrics" | "traces" | "logs" | "anomalies">("metrics");
+  const [activeTab, setActiveTab] = useState<"metrics" | "traces" | "timeline" | "logs" | "anomalies" | "grafana">("metrics");
   const [overview, setOverview] = useState<ClusterOverview | null>(null);
   const [servicesData, setServicesData] = useState<Record<string, any>>({});
   const [alerts, setAlerts] = useState<AnomalyAlert[]>([]);
   const [traces, setTraces] = useState<Trace[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
   const [logs, setLogs] = useState<LogRecord[]>([]);
+
+  // Phase 8.3 Live Observability Stack State
+  const [obsStatus, setObsStatus] = useState<ObservabilityStackStatus | null>(null);
+  const [promTemplates, setPromTemplates] = useState<PromQLTemplate[]>([]);
+  const [promQuery, setPromQuery] = useState<string>('sum(rate(http_requests_total[5m])) by (service)');
+  const [promQueryResult, setPromQueryResult] = useState<PrometheusQueryResult | null>(null);
+  const [promRunning, setPromRunning] = useState<boolean>(false);
+  const [otelTraces, setOtelTraces] = useState<OpenTelemetryTrace[]>([]);
+  const [selectedOtelTraceDetail, setSelectedOtelTraceDetail] = useState<any | null>(null);
+  const [timelineItems, setTimelineItems] = useState<UnifiedTelemetryTimelineItem[]>([]);
+  const [timelineIncidentId, setTimelineIncidentId] = useState<string>("default");
+  const [timelineSourceFilter, setTimelineSourceFilter] = useState<string>("ALL");
+  const [grafanaDashboards, setGrafanaDashboards] = useState<GrafanaDashboardInfo[]>([]);
+  const [grafanaDeepLink, setGrafanaDeepLink] = useState<string>("");
 
   // Stage 5.2 Anomaly & Resource Creep State
   const [anomalies, setAnomalies] = useState<AnomalyRecordItem[]>([]);
@@ -66,29 +93,86 @@ export default function TelemetryPage() {
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Initial load of PromQL templates
+  useEffect(() => {
+    api.getMetricsCatalog().then(res => setPromTemplates(res.catalog || [])).catch(() => {});
+    api.getObservabilityStatus().then(res => setObsStatus(res)).catch(() => {});
+  }, []);
+
+  const handleRunPromQL = async (queryToRun?: string) => {
+    const q = queryToRun || promQuery;
+    if (!q) return;
+    try {
+      setPromRunning(true);
+      const res = await api.executeInstantMetricQuery(q);
+      setPromQueryResult(res);
+    } catch (err: any) {
+      setPromQueryResult({
+        status: "ERROR",
+        query: q,
+        result_type: "vector",
+        series: [],
+        error_message: err?.message || "Failed to execute PromQL query",
+        data_source: "PROMETHEUS",
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setPromRunning(false);
+    }
+  };
+
+  const handleSelectOtelTrace = async (traceId: string) => {
+    try {
+      const detail = await api.getOtelTraceDetail(traceId);
+      setSelectedOtelTraceDetail(detail);
+    } catch (err) {
+      console.error("Failed to load trace detail:", err);
+    }
+  };
+
   const fetchTelemetry = async () => {
     try {
-      const [ovRes, svcRes, alertRes] = await Promise.all([
+      const [ovRes, svcRes, alertRes, statusRes] = await Promise.all([
         api.getClusterOverview().catch(() => null),
         api.listLiveServices().catch(() => ({ services: {}, data_source: "LIVE" })),
         api.listAlerts(30).catch(() => []),
+        api.getObservabilityStatus().catch(() => null),
       ]);
 
       setOverview(ovRes);
       setServicesData(svcRes.services || {});
       setAlerts(alertRes || []);
+      if (statusRes) setObsStatus(statusRes);
 
       if (activeTab === "traces") {
-        const traceRes = await api.listTraces({
-          limit: 30,
-          service: serviceFilter || undefined,
-          only_errors: traceOnlyErrors,
-        });
+        const [traceRes, otelRes] = await Promise.all([
+          api.listTraces({
+            limit: 30,
+            service: serviceFilter || undefined,
+            only_errors: traceOnlyErrors,
+          }).catch(() => ({ traces: [] })),
+          api.listOtelTraces({
+            serviceName: serviceFilter || undefined,
+            onlyErrors: traceOnlyErrors,
+            limit: 30,
+          }).catch(() => ({ count: 0, traces: [] })),
+        ]);
         setTraces(traceRes.traces || []);
+        setOtelTraces(otelRes.traces || []);
         if (selectedTrace) {
-          const updated = traceRes.traces.find(t => t.trace_id === selectedTrace.trace_id);
+          const updated = (traceRes.traces || []).find(t => t.trace_id === selectedTrace.trace_id);
           if (updated) setSelectedTrace(updated);
         }
+      } else if (activeTab === "timeline") {
+        const tlRes = await api.getCorrelatedTimeline(timelineIncidentId || "default", 80).catch(() => ({ count: 0, timeline: [] }));
+        setTimelineItems(tlRes.timeline || []);
+      } else if (activeTab === "grafana") {
+        const [dashRes, linkRes] = await Promise.all([
+          api.searchGrafanaDashboards().catch(() => []),
+          api.getGrafanaDeepLink().catch(() => ({ url: "" })),
+        ]);
+        setGrafanaDashboards(dashRes || []);
+        if (linkRes?.url) setGrafanaDeepLink(linkRes.url);
       } else if (activeTab === "logs") {
         const logRes = await api.listLogs({
           limit: 80,
@@ -250,6 +334,65 @@ export default function TelemetryPage() {
         </div>
       </div>
 
+      {/* Phase 8.3 Live Observability Stack Integration Status Bar */}
+      <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Environment:</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              obsStatus?.active_environment_mode === "KUBERNETES"
+                ? "bg-purple-500/10 text-purple-400 border border-purple-500/30"
+                : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+            }`}>
+              {obsStatus?.active_environment_mode || "DEMOMESH"}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Prometheus:</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              obsStatus?.prometheus?.status === "AVAILABLE"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : obsStatus?.prometheus?.status === "UNAVAILABLE"
+                ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                : "bg-slate-800 text-slate-400 border border-slate-700"
+            }`}>
+              {obsStatus?.prometheus?.status || "NOT_CONFIGURED"}
+              {obsStatus?.prometheus?.latency_ms ? ` (${obsStatus.prometheus.latency_ms}ms)` : ""}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">OTel Collector:</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              obsStatus?.opentelemetry?.status === "AVAILABLE"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : "bg-slate-800 text-slate-400 border border-slate-700"
+            }`}>
+              {obsStatus?.opentelemetry?.status || "AVAILABLE"}
+              {obsStatus?.opentelemetry?.buffered_traces_count ? ` (${obsStatus.opentelemetry.buffered_traces_count} traces)` : ""}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Grafana:</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              obsStatus?.grafana?.status === "AVAILABLE"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : obsStatus?.grafana?.status === "UNAVAILABLE"
+                ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                : "bg-slate-800 text-slate-400 border border-slate-700"
+            }`}>
+              {obsStatus?.grafana?.status || "NOT_CONFIGURED"}
+            </span>
+          </div>
+        </div>
+
+        <div className="text-slate-400 text-[11px]">
+          Live Observability Engine v8.3 Active
+        </div>
+      </div>
+
       {/* Cluster KPI Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl">
@@ -294,34 +437,46 @@ export default function TelemetryPage() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-800 gap-6">
+      <div className="flex border-b border-slate-800 gap-6 overflow-x-auto">
         <button
           onClick={() => setActiveTab("metrics")}
-          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
             activeTab === "metrics"
               ? "border-blue-500 text-blue-400"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
           <Activity className="w-4 h-4" />
-          <span>Real-time Metrics & Alerts</span>
+          <span>Metrics & PromQL</span>
         </button>
 
         <button
           onClick={() => setActiveTab("traces")}
-          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
             activeTab === "traces"
               ? "border-blue-500 text-blue-400"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Distributed Traces Waterfall</span>
+          <span>Distributed Traces (OTel)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("timeline")}
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
+            activeTab === "timeline"
+              ? "border-blue-500 text-blue-400"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Unified Incident Timeline</span>
         </button>
 
         <button
           onClick={() => setActiveTab("logs")}
-          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
             activeTab === "logs"
               ? "border-blue-500 text-blue-400"
               : "border-transparent text-slate-400 hover:text-slate-200"
@@ -333,7 +488,7 @@ export default function TelemetryPage() {
 
         <button
           onClick={() => setActiveTab("anomalies")}
-          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 transition ${
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
             activeTab === "anomalies"
               ? "border-blue-500 text-blue-400"
               : "border-transparent text-slate-400 hover:text-slate-200"
@@ -347,11 +502,148 @@ export default function TelemetryPage() {
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab("grafana")}
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 whitespace-nowrap transition ${
+            activeTab === "grafana"
+              ? "border-blue-500 text-blue-400"
+              : "border-transparent text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <ExternalLink className="w-4 h-4" />
+          <span>Grafana Dashboards</span>
+        </button>
       </div>
 
       {/* Tab 1: Real-Time Metrics & Anomaly Alerts */}
       {activeTab === "metrics" && (
         <div className="space-y-6">
+          {/* Phase 8.3 Prometheus Live PromQL Query Studio */}
+          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <Terminal className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase font-mono">
+                  Prometheus PromQL Query Studio
+                </h2>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  obsStatus?.prometheus?.status === "AVAILABLE"
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : "bg-slate-800 text-slate-400 border border-slate-700"
+                }`}>
+                  {obsStatus?.prometheus?.status || "NOT_CONFIGURED"}
+                </span>
+              </div>
+              <div className="text-xs text-slate-400 font-mono">
+                {obsStatus?.prometheus?.endpoint || "http://localhost:9090"}
+              </div>
+            </div>
+
+            {/* Template Shortcuts */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-mono text-slate-400">Curated PromQL Templates:</div>
+              <div className="flex flex-wrap gap-2">
+                {promTemplates.slice(0, 6).map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => {
+                      const q = tpl.query_template.replace(/\{[a-z]+\}/g, ".*");
+                      setPromQuery(q);
+                      handleRunPromQL(q);
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-mono bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white transition flex items-center space-x-1"
+                  >
+                    <span>{tpl.name}</span>
+                    <span className="text-[10px] text-slate-500">({tpl.unit})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Query Input Bar */}
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={promQuery}
+                  onChange={(e) => setPromQuery(e.target.value)}
+                  placeholder="Enter PromQL query expression (e.g. sum(rate(http_requests_total[5m])) by (service))..."
+                  className="w-full bg-slate-900/90 border border-slate-700 text-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono focus:border-orange-500 focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRunPromQL();
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => handleRunPromQL()}
+                disabled={promRunning || !promQuery}
+                className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-mono font-semibold flex items-center space-x-2 transition"
+              >
+                {promRunning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                <span>Run PromQL</span>
+              </button>
+            </div>
+
+            {/* Query Output */}
+            {promQueryResult && (
+              <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-slate-400">Result Status:</span>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                      promQueryResult.status === "SUCCESS"
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                        : promQueryResult.status === "EMPTY"
+                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                        : "bg-red-500/10 text-red-400 border border-red-500/30"
+                    }`}>
+                      {promQueryResult.status}
+                    </span>
+                    <span className="text-slate-500 text-[11px]">Type: {promQueryResult.result_type}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">{promQueryResult.series.length} series returned</span>
+                </div>
+
+                {promQueryResult.error_message && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-xs">
+                    {promQueryResult.error_message}
+                  </div>
+                )}
+
+                {promQueryResult.series.length > 0 && (
+                  <div className="overflow-x-auto max-h-56">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-900 text-slate-400 text-[10px] uppercase">
+                        <tr>
+                          <th className="py-2 px-3">Metric Name</th>
+                          <th className="py-2 px-3">Labels</th>
+                          <th className="py-2 px-3 text-right">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {promQueryResult.series.map((s, idx) => (
+                          <tr key={idx} className="hover:bg-slate-900/50">
+                            <td className="py-2 px-3 font-semibold text-slate-200">{s.metric_name}</td>
+                            <td className="py-2 px-3 text-[11px] text-slate-400">
+                              {Object.entries(s.labels)
+                                .filter(([k]) => k !== "__name__")
+                                .map(([k, v]) => `${k}="${v}"`)
+                                .join(", ") || "{}"}
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-orange-400">
+                              {s.latest_value !== null && s.latest_value !== undefined ? s.latest_value.toFixed(3) : "--"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Microservices Metrics Table */}
           <div className="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
@@ -706,6 +998,140 @@ export default function TelemetryPage() {
                     })}
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Unified Incident Timeline */}
+      {activeTab === "timeline" && (
+        <div className="space-y-4">
+          {/* Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0f172a] border border-slate-800 p-4 rounded-xl">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-mono text-slate-400">Incident ID:</span>
+                <input
+                  type="text"
+                  value={timelineIncidentId}
+                  onChange={(e) => setTimelineIncidentId(e.target.value)}
+                  placeholder="e.g. INC-101 or default"
+                  className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-1.5 font-mono w-44"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-mono text-slate-400">Source:</span>
+                <select
+                  value={timelineSourceFilter}
+                  onChange={(e) => setTimelineSourceFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-1.5 font-mono"
+                >
+                  <option value="ALL">All Sources</option>
+                  <option value="PROMETHEUS">Prometheus</option>
+                  <option value="OPENTELEMETRY">OpenTelemetry</option>
+                  <option value="KUBERNETES">Kubernetes</option>
+                  <option value="DEMOMESH">DemoMesh</option>
+                  <option value="INCIDENT">Incident Milestones</option>
+                </select>
+              </div>
+
+              <button
+                onClick={() => {
+                  api.getCorrelatedTimeline(timelineIncidentId || "default", 100)
+                    .then((res) => setTimelineItems(res.timeline || []))
+                    .catch(() => {});
+                }}
+                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-mono flex items-center space-x-1.5 transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Fetch Correlated Timeline</span>
+              </button>
+            </div>
+
+            <div className="text-xs font-mono text-slate-400">
+              Showing {
+                timelineItems.filter(
+                  (item) => timelineSourceFilter === "ALL" || item.source === timelineSourceFilter
+                ).length
+              } correlated signals
+            </div>
+          </div>
+
+          {/* Chronological Timeline Stream */}
+          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 space-y-4">
+            {timelineItems.length === 0 ? (
+              <div className="p-12 text-center text-xs font-mono text-slate-400">
+                No correlated telemetry signals found for incident ID '{timelineIncidentId}'.
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Ensure active faults are running in DemoMesh or real Prometheus metrics/OTel traces have been ingested.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {timelineItems
+                  .filter((item) => timelineSourceFilter === "ALL" || item.source === timelineSourceFilter)
+                  .map((item) => {
+                    const getSourceStyle = (src: string) => {
+                      switch (src) {
+                        case "PROMETHEUS":
+                          return "bg-orange-500/10 text-orange-400 border-orange-500/30";
+                        case "OPENTELEMETRY":
+                          return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+                        case "KUBERNETES":
+                          return "bg-blue-500/10 text-blue-400 border-blue-500/30";
+                        case "DEMOMESH":
+                          return "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+                        case "INCIDENT":
+                          return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+                        default:
+                          return "bg-slate-800 text-slate-400 border-slate-700";
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs font-mono"
+                      >
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSourceStyle(item.source)}`}>
+                              {item.source}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              item.data_source === "LIVE_K8S"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}>
+                              {item.data_source}
+                            </span>
+                            <span className="text-slate-400 text-[11px] font-semibold">{item.category}</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-white font-bold">{item.resource_name}</span>
+                          </div>
+
+                          <div className="text-slate-200 text-xs">
+                            {item.message}
+                          </div>
+
+                          {item.details && Object.keys(item.details).length > 0 && (
+                            <details className="text-[11px] text-slate-400 mt-1 cursor-pointer">
+                              <summary className="hover:text-slate-200">View telemetry payload</summary>
+                              <pre className="mt-1 p-2 bg-slate-950 rounded text-slate-300 text-[10px] overflow-x-auto">
+                                {JSON.stringify(item.details, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+
+                        <div className="text-right text-[11px] text-slate-500 shrink-0 font-mono">
+                          {new Date(item.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -1278,6 +1704,126 @@ export default function TelemetryPage() {
                   <div className="text-xs">
                     Select an anomaly record from the feed to view its 10 SRE diagnostic answers, baseline inspection, and lifecycle controls.
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Grafana Dashboards & Deep Linking */}
+      {activeTab === "grafana" && (
+        <div className="space-y-6">
+          {/* Grafana Status & Deep Link Generator */}
+          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <ExternalLink className="w-4 h-4 text-orange-400" />
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase font-mono">
+                  Grafana Live Dashboards & Deep Linking
+                </h2>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  obsStatus?.grafana?.status === "AVAILABLE"
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                    : "bg-slate-800 text-slate-400 border border-slate-700"
+                }`}>
+                  {obsStatus?.grafana?.status || "NOT_CONFIGURED"}
+                </span>
+              </div>
+              <div className="text-xs text-slate-400 font-mono">
+                {obsStatus?.grafana?.endpoint || "http://localhost:3001"}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Incident Deep Link Card */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
+                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
+                  <ArrowUpRight className="w-4 h-4 text-blue-400" />
+                  <span>Scoped Incident Deep Link</span>
+                </div>
+                <p className="text-slate-400 text-[11px]">
+                  Generates an authenticated Grafana dashboard link scoped to the incident time window and service variables without exposing backend secrets.
+                </p>
+
+                <div className="p-2.5 bg-slate-950 rounded-lg text-slate-300 break-all text-[11px] border border-slate-800">
+                  {grafanaDeepLink || `${obsStatus?.grafana?.endpoint || "http://localhost:3001"}/d/incidentx-overview/incident-view?from=now-1h&to=now`}
+                </div>
+
+                <a
+                  href={grafanaDeepLink || `${obsStatus?.grafana?.endpoint || "http://localhost:3001"}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open in Grafana</span>
+                </a>
+              </div>
+
+              {/* Annotation Poster Card */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
+                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span>Incident Annotation Integration</span>
+                </div>
+                <p className="text-slate-400 text-[11px]">
+                  Post incident markers and remediation milestones directly to Grafana dashboard graphs.
+                </p>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.createGrafanaAnnotation({
+                        text: `IncidentX AI automated anomaly detection marker at ${new Date().toISOString()}`,
+                        tags: ["incidentx", "ai-detection", "phase8.3"],
+                      });
+                      alert("Grafana annotation created successfully.");
+                    } catch (err) {
+                      alert("Grafana instance not reachable or not configured.");
+                    }
+                  }}
+                  className="inline-flex items-center space-x-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Post Test Annotation to Grafana</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Discovered Dashboards */}
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                Discovered Grafana Dashboards ({grafanaDashboards.length})
+              </div>
+              {grafanaDashboards.length === 0 ? (
+                <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-xl text-center text-xs font-mono text-slate-400">
+                  No dashboards discovered from Grafana /api/search. Connect a live Grafana instance or configure GRAFANA_API_KEY.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {grafanaDashboards.map((dash) => (
+                    <a
+                      key={dash.uid}
+                      href={dash.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-slate-900 border border-slate-800 hover:border-blue-500/60 rounded-xl transition space-y-1.5 block"
+                    >
+                      <div className="text-xs font-bold text-white font-mono flex items-center justify-between">
+                        <span className="truncate">{dash.title}</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400">UID: {dash.uid}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {dash.tags.map((tag) => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </a>
+                  ))}
                 </div>
               )}
             </div>

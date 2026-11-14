@@ -5,7 +5,7 @@ FastAPI master application configuring routers, middleware, exception handlers, 
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 
@@ -42,6 +42,14 @@ async def lifespan(app: FastAPI):
     from backend.app.core.migration_phase6 import run_phase6_migration
     await run_phase6_migration()
 
+    # Run Phase 9 Central Incident Lifecycle & Alert Ingestion migration
+    from backend.app.core.migration_phase9 import run_phase9_migration
+    await run_phase9_migration()
+
+    # Run Phase 10 Advanced Multi-Agent Investigation migration
+    from backend.app.core.migration_phase10 import run_phase10_migration
+    await run_phase10_migration()
+
     # Start autonomous observability & detection engine
     from backend.app.services.observability.engine import observability_engine
     await observability_engine.start()
@@ -51,6 +59,11 @@ async def lifespan(app: FastAPI):
     from backend.app.services.observability.collector import observability_collector
     await observability_collector.start()
     logger.info("Continuous telemetry collector started.")
+
+    # Initialize Phase 8 Dual-Environment Abstraction Engine
+    from backend.app.infrastructure.core.environment_manager import environment_manager
+    await environment_manager.initialize()
+    logger.info("Dual-Environment Abstraction Engine initialized.")
 
     yield
 
@@ -88,6 +101,7 @@ app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -123,6 +137,15 @@ async def kubernetes_healthz():
         "status": "healthy" if db_ok else "unhealthy",
         "database": "connected" if db_ok else "disconnected",
     }
+
+
+# 6. OpenTelemetry Direct Ingestion Compatibility Endpoint (/v1/traces)
+@app.post("/v1/traces", tags=["Observability"])
+async def direct_otlp_traces_compat(payload: dict = Body(...)):
+    """Standard OpenTelemetry OTLP/HTTP JSON collector endpoint."""
+    from backend.app.services.observability.opentelemetry import otel_collector
+    ids = otel_collector.ingest_otlp_payload(payload)
+    return {"partialSuccess": {}, "ingestedTraceIds": ids}
 
 
 if __name__ == "__main__":

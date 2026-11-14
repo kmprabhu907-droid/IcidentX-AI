@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Activity, Bell, Building, RefreshCw, Server, ShieldCheck } from "lucide-react";
 import { api } from "../services/api";
 import { SystemHealth } from "../types";
+import { EnvironmentSelector } from "./EnvironmentSelector";
 
 export function Header() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
@@ -31,9 +32,7 @@ export function Header() {
   return (
     <header className="h-16 border-b border-slate-800 bg-[#0d1322]/80 backdrop-blur-md px-6 flex items-center justify-between z-20">
       <div className="flex items-center space-x-4">
-        <h2 className="text-sm font-semibold text-slate-200 tracking-tight font-mono">
-          CLUSTER: <span className="text-blue-400 font-bold">us-east-prod-k8s</span>
-        </h2>
+        <EnvironmentSelector />
         <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-md border border-slate-800 bg-slate-900/40 text-xs font-mono text-slate-400">
           <Building className="w-3.5 h-3.5 text-blue-400" />
           <span>TENANT:</span>

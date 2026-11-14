@@ -13,17 +13,27 @@ from backend.app.services.investigation.agents.deployment_agent import Deploymen
 from backend.app.services.investigation.agents.hypothesis_agent import RootCauseHypothesisAgent
 from backend.app.services.investigation.agents.verification_agent import EvidenceVerificationAgent
 from backend.app.services.investigation.agents.summary_agent import InvestigationSummaryAgent
+from backend.app.services.investigation.agents.kubernetes_agent import KubernetesInvestigatorAgent
+from backend.app.services.investigation.agents.network_agent import NetworkInvestigationAgent
+from backend.app.services.investigation.agents.security_agent import SecurityInvestigationAgent
+from backend.app.services.investigation.agents.remediation_agent import RemediationIntelligenceAgent
+from backend.app.services.investigation.agents.consensus_agent import InvestigationQualityConsensusAgent
 
 __all__ = [
     "BaseInvestigationAgent",
     "IncidentIntakeAgent",
     "ContextGatheringAgent",
+    "KubernetesInvestigatorAgent",
     "TelemetryAnalysisAgent",
     "LogAnalysisAgent",
     "TraceAnalysisAgent",
     "ServiceDependencyAnalysisAgent",
     "DeploymentChangeAgent",
+    "NetworkInvestigationAgent",
+    "SecurityInvestigationAgent",
     "RootCauseHypothesisAgent",
     "EvidenceVerificationAgent",
+    "RemediationIntelligenceAgent",
+    "InvestigationQualityConsensusAgent",
     "InvestigationSummaryAgent",
 ]

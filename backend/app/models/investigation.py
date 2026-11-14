@@ -33,6 +33,12 @@ class Evidence(Base, UUIDMixin, TimestampMixin):
     verification_status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="VERIFIED"
     )  # VERIFIED, CONTRADICTED, UNVERIFIED, INSUFFICIENT
+    investigation_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    evidence_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    source_agent: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    is_fact: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    environment: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default="DEMOMESH")
+    deduplication_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     observed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -119,3 +125,18 @@ class InvestigationPlan(Base, UUIDMixin, TimestampMixin):
     )  # RECOMMENDED, EXECUTED, DISMISSED
 
     incident: Mapped["Incident"] = relationship("Incident", back_populates="investigation_plans")
+
+
+class AgentMessageModel(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "investigation_messages"
+
+    incident_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    investigation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    sender_agent: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    recipient_agent: Mapped[str] = mapped_column(String(50), nullable=False, default="BROADCAST")
+    message_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)

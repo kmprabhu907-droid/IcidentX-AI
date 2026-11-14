@@ -12,15 +12,21 @@ from pydantic import BaseModel, ConfigDict
 class EvidenceResponse(BaseModel):
     id: str
     incident_id: str
+    investigation_id: Optional[str] = None
     hypothesis_id: Optional[str] = None
     evidence_type: str
+    evidence_category: Optional[str] = None
     source_system: str
+    source_agent: Optional[str] = None
     affected_service_name: Optional[str] = None
     raw_source_ref: Optional[str] = None
     description: str
     relevant_observation: Optional[str] = None
     confidence_score: float
     is_contradictory: bool
+    is_fact: bool = True
+    environment: Optional[str] = "DEMOMESH"
+    deduplication_hash: Optional[str] = None
     verification_status: str = "VERIFIED"
     observed_at: datetime
     raw_data: Optional[str] = None

@@ -188,3 +188,39 @@ class InvestigationSummaryResult(BaseModel):
     causal_reconstruction: List[str] = Field(default_factory=list)
     recommended_diagnostic_actions: List[DiagnosticAction] = Field(default_factory=list)
     evidence_provenance_count: int = 0
+
+
+# -------------------------------------------------------------
+# 11. Kubernetes Infrastructure Investigator Agent Schemas
+# -------------------------------------------------------------
+class KubernetesPodDiagnostic(BaseModel):
+    pod_name: str
+    namespace: str
+    phase: str
+    restart_count: int
+    exit_code: Optional[int] = None
+    exit_reason: Optional[str] = None
+    node_name: Optional[str] = None
+    is_crashloop: bool = False
+    is_oomkilled: bool = False
+
+
+class KubernetesNodeDiagnostic(BaseModel):
+    node_name: str
+    ready: bool
+    memory_pressure: bool = False
+    disk_pressure: bool = False
+    pid_pressure: bool = False
+
+
+class KubernetesDiagnosticResult(BaseModel):
+    environment_mode: str
+    cluster_reachable: bool = True
+    pod_diagnostics: List[KubernetesPodDiagnostic] = Field(default_factory=list)
+    node_diagnostics: List[KubernetesNodeDiagnostic] = Field(default_factory=list)
+    warning_events_count: int = 0
+    oomkilled_count: int = 0
+    crashloop_count: int = 0
+    infrastructure_culprit_service: Optional[str] = None
+    infrastructure_summary: str = ""
+

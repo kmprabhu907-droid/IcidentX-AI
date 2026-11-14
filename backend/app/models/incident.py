@@ -5,7 +5,7 @@ Represents the core incident lifecycle and operational metadata.
 
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import DateTime, Float, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.core.database import Base, TimestampMixin, UUIDMixin
 
@@ -46,6 +46,22 @@ class Incident(Base, UUIDMixin, TimestampMixin):
         index=True
     )
 
+    # Phase 9 Central Incident Lifecycle & Ownership Fields
+    priority: Mapped[str] = mapped_column(String(20), nullable=False, default="HIGH")  # CRITICAL, HIGH, MEDIUM, LOW
+    environment: Mapped[str] = mapped_column(String(30), nullable=False, default="DEMOMESH", index=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="MANUAL", index=True)
+    fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    owner_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    owner_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    assigned_team: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default="Platform SRE")
+    oncall_responder: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default="IncidentX AI (Tier-1)")
+    escalation_status: Mapped[str] = mapped_column(String(30), nullable=False, default="NORMAL")
+    escalation_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     # Relationships
     evidence_items: Mapped[List["Evidence"]] = relationship(
         "Evidence", back_populates="incident", cascade="all, delete-orphan"
@@ -70,6 +86,12 @@ class Incident(Base, UUIDMixin, TimestampMixin):
     )
     investigation_plans: Mapped[List["InvestigationPlan"]] = relationship(
         "InvestigationPlan", back_populates="incident", cascade="all, delete-orphan"
+    )
+    alerts: Mapped[List["Alert"]] = relationship(
+        "Alert", back_populates="incident"
+    )
+    assignments: Mapped[List["IncidentAssignment"]] = relationship(
+        "IncidentAssignment", back_populates="incident", cascade="all, delete-orphan"
     )
 
     __table_args__ = (

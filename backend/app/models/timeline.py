@@ -30,6 +30,8 @@ class TimelineEvent(Base, UUIDMixin, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="INFO")  # INFO, WARN, CRITICAL
+    actor: Mapped[str] = mapped_column(String(100), nullable=False, default="SYSTEM")
+    actor_type: Mapped[str] = mapped_column(String(30), nullable=False, default="SYSTEM")  # AI_AGENT, HUMAN, SYSTEM
     data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="LIVE")  # LIVE or SIMULATED
     raw_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
