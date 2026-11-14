@@ -3,6 +3,16 @@
 > **The Autonomous Reliability Intelligence System**  
 > *Autonomous AI Incident Investigation, Causal Reasoning, and Self-Healing Platform*
 
+[![Presentation Deck](https://img.shields.io/badge/📊_Presentation-Pitch_Deck_(PowerPoint)-orange?style=for-the-badge)](https://1drv.ms/p/c/00BD976D974844F1/IQAyYpedLc2UT4xLKQ9SASnJAY_FSRiA5eGyeO89TX9vrEo?e=RNOHvd)
+[![Team TitanIQ](https://img.shields.io/badge/Team-TitanIQ-blue?style=for-the-badge)](#)
+[![Hackathon](https://img.shields.io/badge/AgentX_2026-Sahyadri_College-success?style=for-the-badge)](#)
+
+---
+
+## 📊 Presentation & Pitch Deck
+- 🖥️ **Official Slide Deck**: **[Click here to view IncidentX AI Pitch Deck (OneDrive PowerPoint)](https://1drv.ms/p/c/00BD976D974844F1/IQAyYpedLc2UT4xLKQ9SASnJAY_FSRiA5eGyeO89TX9vrEo?e=RNOHvd)**
+- 👥 **Team**: TitanIQ | **Event**: AgentX 2026 Autonomous AI Showcase
+
 ---
 
 ## 📌 Executive Overview
